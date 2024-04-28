@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>GTM - Camera</title>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+
+        #video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            overflow: hidden;
+            object-fit: fill;
+            z-index: -100;
+        }
+
+        .footer {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0;
+        }
+
+        .button {
+            text-align: center;
+            flex-grow: 1;
+        }
+
+        .circle {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            background-color: #007BFF;
+            border-radius: 50%;
+            color: white;
+            line-height: 50px;
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .button .name {
+            color: white;
+            text-shadow: 0px 0px 8px rgba(0, 0, 0, 0.8);
+        }
+
+        #overlay {
+            position: fixed;
+            display: none;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 2;
+            cursor: pointer;
+        }
+
+        .overlay-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+            font-size: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <video id="video" autoplay playsinline></video>
+
+    <div id="overlay" onclick="toggleMenu()">
+        <div class="overlay-content">
+            <p onclick="sendMessage('option 1')">Option 1</p>
+            <p>Option 2</p>
+            <p>Option 3</p>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="button" id="rejectButton">
+            <div class="circle">&#10005;</div>
+            <div class="name">Reject</div>
+        </div>
+        <div class="button" onclick="toggleMenu()">
+            <div class="circle">&#9776;</div>
+            <div class="name">Menu</div>
+        </div>
+        <div class="button" id="acceptButton">
+            <div class="circle">&#43;</div>
+            <div class="name">Enter</div>
+        </div>
+    </div>
+
+
+    <script>
+        const video = document.getElementById('video');
+        const socket = new WebSocket('wss://laptop.elyk.io/websocket');
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        var cameraID = 0;
+        const frameInterval = 1000 / 30;
+        let lastFrameTime = Date.now();
+
+        socket.onopen = function (event) {
+            navigator.mediaDevices.enumerateDevices()
+                .then(devices => {
+                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                    // TODO : This gets the last one, which might not be what we want.
+                    cameraID = videoDevices[2].deviceId;
+
+                    getCameraStream();
+                })
+                .catch(console.error);
+        };
+
+
+        function getCameraStream () {
+            const constraints = {
+                video: {
+                    width: { ideal: 3840 },
+                    height: { ideal: 2160 },
+                    deviceId: cameraID ? { exact: cameraID } : undefined
+                }
+            };
+            navigator.mediaDevices.getUserMedia(constraints)
+                .then(stream => {
+                    video.srcObject = stream;
+                    video.play();
+                    video.addEventListener('play', drawAndSend);
+                })
+                .catch(console.error);
+        }
+
+        function drawAndSend () {
+            if (video.paused || video.ended) return;
+            if (Date.now() - lastFrameTime >= frameInterval)
+            {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                canvas.toBlob(blob => {
+                    sendBlob(blob);
+                }, 'image/jpeg', 1.0);
+
+                lastFrameTime = Date.now();
+            }
+            requestAnimationFrame(drawAndSend);
+        }
+
+        function sendBlob (blob) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                if (socket.readyState === WebSocket.OPEN)
+                {
+                    socket.send(reader.result);
+                }
+            };
+            reader.readAsArrayBuffer(blob);
+        }
+
+        function sendMessage (message) {
+            if (socket.readyState === WebSocket.OPEN)
+            {
+                socket.send(message);
+            } else
+            {
+                console.log('WebSocket connection is not open.');
+            }
+        }
+
+        function toggleMenu () {
+            var overlay = document.getElementById("overlay");
+            if (overlay.style.display === "none")
+            {
+                overlay.style.display = "block";
+            } else
+            {
+                overlay.style.display = "none";
+            }
+        }
+
+        document.getElementById('acceptButton').addEventListener('click', function () {
+            sendMessage("Accept from the client!");
+        });
+
+        document.getElementById('rejectButton').addEventListener('click', function () {
+            sendMessage("Reject from the client!");
+        });
+
+        socket.onmessage = function (event) {
+            console.log('Message from server ', event.data);
+        };
+    </script>
+</body>
+
+</html>
