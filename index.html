@@ -61,7 +61,7 @@
             text-shadow: 0px 0px 8px rgba(0, 0, 0, 0.8);
         }
 
-        #overlay {
+        .overlay {
             position: fixed;
             display: none;
             width: 100%;
@@ -73,6 +73,7 @@
             background-color: rgba(0, 0, 0, 0.5);
             z-index: 2;
             cursor: pointer;
+            overflow-y: auto;
         }
 
         .overlay-content {
@@ -84,35 +85,63 @@
             color: white;
             font-size: 20px;
         }
+
+        #searchResults {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            padding: 20px;
+            max-height: 80%;
+            overflow-y: auto;
+        }
+
+        .card {
+            cursor: pointer;
+            margin: 5px;
+            flex: 0 1 30%;
+            text-align: center;
+            background: transparent;
+        }
+
+        .card img {
+            width: 100%;
+            border-radius: 5px;
+            overflow: hidden;
+        }
     </style>
 </head>
 
 <body>
     <video id="video" autoplay playsinline></video>
 
-    <div id="overlay" onclick="toggleMenu()">
+    <div class="overlay" id="menuOverlay" onclick="toggleMenu('menuOverlay')">
         <div class="overlay-content">
-            <p onclick="sendMessage('option 1')">Option 1</p>
-            <p>Option 2</p>
-            <p>Option 3</p>
+            <p onclick="sendMessage('option 1')">History</p>
+            <p>Calibrate Known Card</p>
         </div>
     </div>
 
+    <div class="overlay" id="searchOverlay" onclick="toggleMenu('searchOverlay')">
+        <input type="text" id="searchInput" placeholder="Search MTG Cards" oninput="searchCards()"
+            onclick="event.stopPropagation()"
+            style="width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box;">
+        <div id="searchResults" style="display: flex; flex-wrap: wrap; justify-content: center; padding: 20px;"></div>
+    </div>
+
     <div class="footer">
-        <div class="button" id="rejectButton">
+        <div class="button" id="rejectButton" onclick="sendMessage('reject')">
             <div class="circle">&#10005;</div>
             <div class="name">Reject</div>
         </div>
-        <div class="button" onclick="toggleMenu()">
+        <div class="button" onclick="toggleMenu('menuOverlay')">
             <div class="circle">&#9776;</div>
             <div class="name">Menu</div>
         </div>
-        <div class="button" id="acceptButton">
+        <div class="button" onclick="toggleMenu('searchOverlay')">
             <div class="circle">&#43;</div>
             <div class="name">Enter</div>
         </div>
     </div>
-
 
     <script>
         const video = document.getElementById('video');
@@ -134,7 +163,6 @@
                 })
                 .catch(console.error);
         };
-
 
         function getCameraStream () {
             const constraints = {
@@ -159,7 +187,14 @@
             {
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 canvas.toBlob(blob => {
-                    sendBlob(blob);
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        if (socket.readyState === WebSocket.OPEN)
+                        {
+                            socket.send(reader.result);
+                        }
+                    };
+                    reader.readAsArrayBuffer(blob);
                 }, 'image/jpeg', 1.0);
 
                 lastFrameTime = Date.now();
@@ -167,29 +202,24 @@
             requestAnimationFrame(drawAndSend);
         }
 
-        function sendBlob (blob) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                if (socket.readyState === WebSocket.OPEN)
-                {
-                    socket.send(reader.result);
-                }
-            };
-            reader.readAsArrayBuffer(blob);
-        }
-
-        function sendMessage (message) {
+        function sendMessage (action, message) {
             if (socket.readyState === WebSocket.OPEN)
             {
-                socket.send(message);
+                if (message)
+                {
+                    socket.send(JSON.stringify({ action: action, message: message }));
+                } else
+                {
+                    socket.send(JSON.stringify({ action: action }));
+                }
             } else
             {
                 console.log('WebSocket connection is not open.');
             }
         }
 
-        function toggleMenu () {
-            var overlay = document.getElementById("overlay");
+        function toggleMenu (name) {
+            var overlay = document.getElementById(name);
             if (overlay.style.display === "none")
             {
                 overlay.style.display = "block";
@@ -199,16 +229,34 @@
             }
         }
 
-        document.getElementById('acceptButton').addEventListener('click', function () {
-            sendMessage("Accept from the client!");
-        });
+        function searchCards () {
+            var input = document.getElementById('searchInput').value;
+            if (input.length > 1)
+            {
+                sendMessage("search", input);
+            }
+        }
 
-        document.getElementById('rejectButton').addEventListener('click', function () {
-            sendMessage("Reject from the client!");
-        });
+        function selectCard (uuid) {
+            sendMessage("selectCard", uuid);
+            toggleMenu();
+        }
 
         socket.onmessage = function (event) {
             console.log('Message from server ', event.data);
+            var data = JSON.parse(event.data);
+            if (data.action === "searchResults")
+            {
+                var resultsContainer = document.getElementById('searchResults');
+                resultsContainer.innerHTML = '';
+                data.results.forEach(function (card) {
+                    var cardElement = document.createElement('div');
+                    cardElement.classList.add('card');
+                    cardElement.innerHTML = '<img src="https://laptop.elyk.io' + card.imageUrl + '" style="width: 100%;">';
+                    cardElement.onclick = function () { selectCard(card.uuid); };
+                    resultsContainer.appendChild(cardElement);
+                });
+            }
         };
     </script>
 </body>
