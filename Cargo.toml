@@ -13,3 +13,6 @@ futures = "0.3"
 scryers = { path = "../scryers" }
 strsim = "0.11.1"
 lazy_static = "1.4.0"
+opencv = "0.91.2"
+anyhow = "1.0.82"
+tokio-stream = "0.1.15"

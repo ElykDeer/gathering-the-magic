@@ -1,3 +1,5 @@
+mod image;
+mod image_card_extraction;
 mod search;
 use crate::search::search;
 
@@ -33,7 +35,11 @@ async fn main() {
 
     let routes = websocket_route.or(image_route).or(static_files);
 
-    warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
+    // Either spawn the server and run the visualizer, or just await the server
+    tokio::spawn(warp::serve(routes).run(([0, 0, 0, 0], 3030)));
+    // warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
+
+    image::run_visualizer().await.unwrap();
 }
 
 #[derive(Deserialize)]
@@ -53,14 +59,15 @@ async fn handle_websocket(websocket: WebSocket) {
             }
         };
         if msg.is_text() {
-            println!("{:?}", msg);
             if let Ok(text) = msg.to_str() {
                 if let Ok(action_msg) = serde_json::from_str::<ActionMessage>(text) {
                     handle_action(&action_msg, &mut tx).await;
                 }
             }
         } else if msg.is_binary() {
-            // println!("Received frame: {:?}", msg.as_bytes().len());
+            if let Err(e) = image_card_extraction::process_frame(msg.as_bytes()) {
+                eprintln!("{:?}", e);
+            }
         } else {
             println!("Unknown : {:?}", msg);
         }
