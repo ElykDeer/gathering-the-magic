@@ -1,3 +1,4 @@
+mod card;
 mod image;
 mod image_card_extraction;
 mod search;
