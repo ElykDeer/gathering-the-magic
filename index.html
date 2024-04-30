@@ -145,12 +145,60 @@
 
     <script>
         const video = document.getElementById('video');
-        const socket = new WebSocket('wss://laptop.elyk.io/websocket');
+        let socket;
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         var cameraID = 0;
         const frameInterval = 1000 / 30;
         let lastFrameTime = Date.now();
+
+
+        function connectWebSocket () {
+            socket = new WebSocket('wss://laptop.elyk.io/websocket');
+
+            socket.onopen = function (event) {
+                console.log("WebSocket is open now.");
+                navigator.mediaDevices.enumerateDevices()
+                    .then(devices => {
+                        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                        cameraID = videoDevices[2].deviceId; // Check this logic as needed
+                        getCameraStream();
+                    })
+                    .catch(console.error);
+            };
+
+            socket.onclose = function (event) {
+                console.log("WebSocket is closed now.");
+                if (!event.wasClean)
+                {
+                    console.log('Reconnecting WebSocket...');
+                    setTimeout(connectWebSocket, 1000);
+                }
+            };
+
+            socket.onerror = function (error) {
+                console.log('WebSocket Error: ' + error);
+            };
+
+            socket.onmessage = function (event) {
+                console.log('Message from server ', event.data);
+                var data = JSON.parse(event.data);
+                if (data.action === "searchResults")
+                {
+                    var resultsContainer = document.getElementById('searchResults');
+                    resultsContainer.innerHTML = '';
+                    data.results.forEach(function (card) {
+                        var cardElement = document.createElement('div');
+                        cardElement.classList.add('card');
+                        cardElement.innerHTML = '<img src="https://laptop.elyk.io' + card.imageUrl + '" style="width: 100%;">';
+                        cardElement.onclick = function () { selectCard(card.uuid); };
+                        resultsContainer.appendChild(cardElement);
+                    });
+                }
+            };
+        }
+
+        connectWebSocket();
 
         socket.onopen = function (event) {
             navigator.mediaDevices.enumerateDevices()
