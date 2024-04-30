@@ -2,21 +2,29 @@ use crate::card;
 
 use anyhow::Result;
 use opencv::{
-    core::Vector,
+    core::{Mat, Point, Point2f, Size, Vector},
     imgcodecs::{imdecode, IMREAD_COLOR},
-};
-use opencv::{
-    core::{Mat, Point, Size},
     imgproc::{
-        bounding_rect, cvt_color, find_contours, gaussian_blur, threshold,
+        bounding_rect, cvt_color, find_contours, gaussian_blur, min_area_rect, threshold,
         ContourApproximationModes, RetrievalModes, COLOR_BGR2GRAY, THRESH_BINARY,
     },
 };
 
+lazy_static::lazy_static! {
+    pub(crate) static ref CARD: std::sync::Mutex<card::Card> = std::sync::Mutex::new(card::Card::default());
+}
+
 pub(crate) fn process_frame(frame_data: &[u8]) -> Result<()> {
     let mut frame = imdecode(&Vector::from_slice(frame_data), IMREAD_COLOR)?;
 
-    get_cards(&mut frame)?;
+    {
+        let mut card = CARD.lock().unwrap();
+        if let Some(new_card) = get_card(&mut frame)? {
+            card.update(new_card);
+        }
+        card.prune();
+        card.draw(&mut frame);
+    }
 
     // Send the frame to the visualizer, if the visualizer is enabled
     if let (Ok(visualizer), Ok(mut global_frame)) = (
@@ -30,7 +38,7 @@ pub(crate) fn process_frame(frame_data: &[u8]) -> Result<()> {
     Ok(())
 }
 
-pub fn get_cards(frame: &mut Mat) -> Result<Vec<card::Card>> {
+pub fn get_card(frame: &mut Mat) -> Result<Option<card::Card>> {
     // Convert image to grayscale
     let mut gray = Mat::default();
     cvt_color(frame, &mut gray, COLOR_BGR2GRAY, 0)?;
@@ -97,5 +105,55 @@ pub fn get_cards(frame: &mut Mat) -> Result<Vec<card::Card>> {
         })
         .collect();
 
-    card::find_cards(&contours, frame)
+    find_card(&contours)
+}
+
+fn find_card(contours: &Vector<Vector<Point>>) -> Result<Option<card::Card>> {
+    let mut result: Vec<card::Card> = vec![];
+
+    // Draw rectangles around all the contours
+    for c in 0..contours.len() {
+        let contour: Vector<Point> = contours.get(c)?;
+        let rect = min_area_rect(&contour)?;
+
+        let mut points: [Point2f; 4] = [
+            Point2f::default(),
+            Point2f::default(),
+            Point2f::default(),
+            Point2f::default(),
+        ];
+        rect.points(&mut points)?;
+        result.push(card::Card::new(
+            points
+                .into_iter()
+                .map(|p| [p.x.round() as i32, p.y.round() as i32])
+                .collect::<Vec<[i32; 2]>>(),
+            contour,
+        ));
+    }
+
+    // Filter rects in rects
+    let mut r = 0;
+    while r < result.len() {
+        let c1 = &result[r];
+        if result
+            .iter()
+            .enumerate()
+            .filter(|&(i, _)| i != r)
+            .map(|(_, c2)| c2)
+            .any(|c2| {
+                card::distance_formula(c1.x, c1.y, c2.x, c2.y) < c1.radius && c2.area > c1.area
+            })
+        {
+            result.remove(r);
+        } else {
+            r += 1;
+        }
+    }
+
+    if result.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(result.into_iter().next().unwrap()))
+    }
 }
