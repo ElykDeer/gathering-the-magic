@@ -67,9 +67,23 @@ pub fn hash_all_cards() -> Result<()> {
 }
 
 pub fn calculate_hash(image: &Mat) -> Option<u64> {
+    let mut resized_image = Mat::default();
+    if resize(
+        &image,
+        &mut resized_image,
+        Size::new(*X, *Y),
+        0.0,
+        0.0,
+        InterpolationFlags::INTER_CUBIC as i32,
+    )
+    .is_err()
+    {
+        return None;
+    }
+
     let mut blur = Mat::default();
     if gaussian_blur(
-        &image,
+        &resized_image,
         &mut blur,
         Size::new(5, 5),
         0.0,
@@ -81,22 +95,8 @@ pub fn calculate_hash(image: &Mat) -> Option<u64> {
         return None;
     }
 
-    let mut resized_image = Mat::default();
-    if resize(
-        &blur,
-        &mut resized_image,
-        Size::new(*X, *Y),
-        0.0,
-        0.0,
-        InterpolationFlags::INTER_LINEAR as i32,
-    )
-    .is_err()
-    {
-        return None;
-    }
-
     let mut hash = Mat::default();
-    p_hash(&resized_image, &mut hash).unwrap();
+    p_hash(&blur, &mut hash).unwrap();
     Some(u64::from_be_bytes(
         hash.data_bytes().unwrap().try_into().unwrap(),
     ))
