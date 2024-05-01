@@ -1,6 +1,7 @@
 mod card;
 mod image;
 mod image_card_extraction;
+mod image_hash;
 mod search;
 use crate::search::search;
 
@@ -26,6 +27,8 @@ async fn main() {
             scryers::download_all_cards();
         }
     }
+
+    image_hash::hash_all_cards().unwrap();
 
     let static_files = warp::get().and(warp::fs::file("./index.html"));
     let image_route = warp::path("images").and(warp::fs::dir("../gathering_the_magic/images/"));

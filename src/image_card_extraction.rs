@@ -1,4 +1,5 @@
 use crate::card;
+use crate::image_hash;
 
 use anyhow::Result;
 use opencv::{
@@ -17,14 +18,27 @@ lazy_static::lazy_static! {
 pub(crate) fn process_frame(frame_data: &[u8]) -> Result<()> {
     let mut frame = imdecode(&Vector::from_slice(frame_data), IMREAD_COLOR)?;
 
-    {
+    let alive = {
         let mut card = CARD.lock().unwrap();
         if let Some(new_card) = get_card(&mut frame)? {
             card.update(new_card);
         }
         card.prune();
         card.draw(&mut frame);
+        card.alive
+    };
+
+    if alive {
+        if let Some(card_id) = image_hash::get_card_id(&frame) {
+            let mut cards = crate::search::CARDS.lock().unwrap();
+            let card = cards.get_card_by_id(&card_id).unwrap();
+            println!("Card: {}", card.name());
+        }
     }
+
+    // TODO : Then send the guessed ID/variation to the client to accept or not
+    // TODO : If DEATH comes before REJECTION, "save to database" (print for now)
+    // Then go back and fix everything up because a bunch of stuff is missing and broken
 
     // Send the frame to the visualizer, if the visualizer is enabled
     if let (Ok(visualizer), Ok(mut global_frame)) = (
