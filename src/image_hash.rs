@@ -1,12 +1,22 @@
 use anyhow::Result;
 use glob::glob;
+
 use opencv::{
-    core::{Mat, Size},
+    core::{
+        merge, no_array, normalize as cvnormalize, split, BorderTypes, DecompTypes, Mat, NormTypes,
+        Size, Vector, CV_32F,
+    },
     img_hash::p_hash,
     imgcodecs::{imread, ImreadModes},
-    imgproc::{gaussian_blur, resize, InterpolationFlags},
-    prelude::MatTraitConstManual,
+    imgproc::{
+        bounding_rect, canny, contour_area, create_clahe, cvt_color, draw_contours, find_contours,
+        gaussian_blur, get_perspective_transform, get_text_size, line, min_area_rect, put_text,
+        resize, warp_perspective, ColorConversionCodes, ContourApproximationModes, HersheyFonts,
+        InterpolationFlags, LineTypes, RetrievalModes,
+    },
+    prelude::{CLAHETrait, MatTraitConst, MatTraitConstManual},
 };
+
 use rayon::prelude::*;
 use serde_json;
 use std::{collections::HashMap, fs::File, io::BufReader};
@@ -23,6 +33,8 @@ lazy_static::lazy_static! {
     // Size::new(200, 280),
     pub(crate) static ref X: i32 = 75;
     pub(crate) static ref Y: i32 = 105;
+    // pub(crate) static ref X: i32 = 250;
+    // pub(crate) static ref Y: i32 = 350;
     pub(crate) static ref HASHES: HashMap<u64, String> = serde_json::from_reader(BufReader::new(File::open(database_name()).unwrap())).unwrap();
 }
 
@@ -66,40 +78,81 @@ pub fn hash_all_cards() -> Result<()> {
     Ok(())
 }
 
-pub fn calculate_hash(image: &Mat) -> Option<u64> {
+pub fn normalize(frame: &Mat) -> Result<Mat> {
+    // Denoise (TODO : there must be more robust ways of doing this)
+    // let mut blur = Mat::default();
+    // bilateral_filter(&frame, &mut blur, 9, 75.0, 75.0, BORDER_DEFAULT as i32)?;
+    // let mut denoised = Mat::default();
+    // fast_nl_means_denoising_colored(&blur, &mut denoised, 10.0, 10.0, 7, 21)?;
+
+    // // CLAHE Normalization
+    // let mut clahe = create_clahe(4.0, Size::new(8, 8))?;
+    // let mut lab = Mat::default();
+    // cvt_color(
+    //     &frame,
+    //     &mut lab,
+    //     ColorConversionCodes::COLOR_BGR2Lab as i32,
+    //     0,
+    // )?;
+    // let mut channels: Vector<Mat> = Vector::new();
+    // split(&lab, &mut channels)?;
+    // let mut dst = Mat::default();
+    // clahe.apply(&channels.get(0)?, &mut dst)?;
+    // channels.set(0, dst)?;
+    // merge(&channels, &mut lab)?;
+    // let mut normalized = Mat::default();
+    // cvt_color(
+    //     &lab,
+    //     &mut normalized,
+    //     ColorConversionCodes::COLOR_Lab2BGR as i32,
+    //     0,
+    // )?;
+
+    // Builtin normalization
+    // let mut normalized = Mat::default();
+    // cvnormalize(
+    //     &frame,
+    //     &mut normalized,
+    //     0.0,
+    //     255.0,
+    //     NormTypes::NORM_MINMAX as i32,
+    //     -1,
+    //     &no_array(),
+    // )?;
+
     let mut resized_image = Mat::default();
-    if resize(
-        &image,
+    resize(
+        &frame,
         &mut resized_image,
         Size::new(*X, *Y),
         0.0,
         0.0,
         InterpolationFlags::INTER_CUBIC as i32,
-    )
-    .is_err()
-    {
-        return None;
-    }
+    )?;
+    // Ok(resized_image)
 
     let mut blur = Mat::default();
-    if gaussian_blur(
+    gaussian_blur(
         &resized_image,
         &mut blur,
         Size::new(5, 5),
         0.0,
         0.0,
         opencv::core::BORDER_DEFAULT,
-    )
-    .is_err()
-    {
-        return None;
-    }
+    )?;
+    Ok(blur)
+}
 
-    let mut hash = Mat::default();
-    p_hash(&blur, &mut hash).unwrap();
-    Some(u64::from_be_bytes(
-        hash.data_bytes().unwrap().try_into().unwrap(),
-    ))
+pub fn calculate_hash(image: &Mat) -> Option<u64> {
+    if let Ok(normalized) = normalize(image) {
+        let mut hash = Mat::default();
+        p_hash(&normalized, &mut hash).unwrap();
+        Some(u64::from_be_bytes(
+            hash.data_bytes().unwrap().try_into().unwrap(),
+        ))
+    } else {
+        None
+    }
 }
 
 pub fn hamming_distance(hash: u64, hash1: u64) -> u64 {

@@ -3,6 +3,7 @@ mod image;
 mod image_card_extraction;
 mod image_hash;
 mod search;
+mod text_extraction;
 use crate::search::search;
 
 use futures::{stream::StreamExt, SinkExt};
@@ -31,13 +32,17 @@ async fn main() {
     image_hash::hash_all_cards().unwrap();
 
     let static_files = warp::get().and(warp::fs::file("./index.html"));
-    let image_route = warp::path("images").and(warp::fs::dir("../gathering_the_magic/images/"));
+    let image_route = warp::path("images").and(warp::fs::dir("./images/"));
 
     let websocket_route = warp::path("websocket")
         .and(warp::ws())
         .map(|ws: warp::ws::Ws| ws.on_upgrade(handle_websocket));
 
     let routes = websocket_route.or(image_route).or(static_files);
+
+    {
+        let _unused = search::ALL_FILES.lock().unwrap();
+    }
 
     // Either spawn the server and run the visualizer, or just await the server
     tokio::spawn(warp::serve(routes).run(([0, 0, 0, 0], 3030)));
@@ -85,12 +90,15 @@ async fn handle_action(
     match action_msg.action.as_str() {
         "search" => {
             if let Some(message) = &action_msg.message {
+                println!("Searching for {}", message);
                 let results = search(message);
                 let reply = Message::text(format!(
                     r#"{{"action": "searchResults", "results": [{}]}}"#,
                     results
                 ));
                 assert!(tx.send(reply).await.is_ok());
+            } else {
+                println!("Error getting message.");
             }
         }
         // "echo" => {

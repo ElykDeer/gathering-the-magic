@@ -3,17 +3,19 @@ use scryers::{
     bulk::{BulkDownload, BulkDownloadType},
     card::Card,
 };
-use std::{cmp::Ordering, collections::BinaryHeap};
+use std::{
+    cmp::Ordering,
+    collections::{BinaryHeap, HashMap, HashSet},
+    sync::Mutex,
+};
 use strsim::jaro_winkler;
 
 lazy_static! {
-    pub(crate) static ref CARDS: std::sync::Mutex<BulkDownload> = {
-        std::sync::Mutex::new(
-            BulkDownload::new("./scryfall.db", BulkDownloadType::UniqueArtwork).unwrap(),
-        )
+    pub(crate) static ref CARDS: Mutex<BulkDownload> = {
+        Mutex::new(BulkDownload::new("./scryfall.db", BulkDownloadType::UniqueArtwork).unwrap())
     };
-    pub(crate) static ref ALL_FILES: Vec<String> =
-        std::fs::read_dir(std::path::Path::new("../gathering_the_magic/images/"))
+    pub(crate) static ref ALL_FILES: Mutex<HashMap<String, Vec<String>>> = {
+        let all_files: HashSet<String> = std::fs::read_dir(std::path::Path::new("./images/"))
             .unwrap()
             .map(|entry| {
                 entry
@@ -26,6 +28,60 @@ lazy_static! {
                     .to_owned()
             })
             .collect();
+
+        let mut cards =
+            BulkDownload::new("./scryfall.db", BulkDownloadType::UniqueArtwork).unwrap();
+        Mutex::new(
+            cards
+                .cards()
+                .iter()
+                .map(|card| {
+                    (
+                        card.id().to_owned(),
+                        all_files
+                            .iter()
+                            .filter_map(|filename| {
+                                if filename.starts_with(card.id()) {
+                                    Some(filename.to_owned())
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect(),
+                    )
+                })
+                .collect(),
+        )
+    };
+    pub(crate) static ref TOKENS: Mutex<HashSet<String>> = {
+        let mut cards = CARDS.lock().unwrap();
+        let mut tokens = HashSet::new();
+        for card in cards.cards().iter() {
+            tokens.extend(card.name().split_whitespace().map(String::from));
+            if let Some(text) = card.oracle_text() {
+                tokens.extend(text.split_whitespace().map(String::from));
+            }
+            if let Some(type_line) = card.type_line() {
+                tokens.extend(type_line.split_whitespace().map(String::from));
+            }
+            tokens.extend(card.keywords().iter().map(String::from));
+            if let Some(artist) = card.artist() {
+                tokens.extend(artist.split_whitespace().map(String::from));
+            }
+            if let Some(flavor_name) = card.flavor_name() {
+                tokens.extend(flavor_name.split_whitespace().map(String::from));
+            }
+            if let Some(flavor_text) = card.flavor_text() {
+                tokens.extend(flavor_text.split_whitespace().map(String::from));
+            }
+
+            if let Some(set_name) = card.set_name() {
+                tokens.extend(set_name.split_whitespace().map(String::from));
+            }
+        }
+
+        Mutex::new(tokens)
+    };
 }
 
 struct ScoredCard<'a> {
@@ -54,9 +110,9 @@ impl<'a> PartialOrd for ScoredCard<'a> {
 }
 
 fn rank(query: &str) -> Vec<String> {
-    let mut scryer = CARDS.lock().unwrap();
+    let mut cards = CARDS.lock().unwrap();
     let mut heap = BinaryHeap::new();
-    for card in scryer.cards() {
+    for card in cards.cards() {
         let scores = [
             jaro_winkler(&card.name().to_lowercase(), &query.to_lowercase()),
             card.oracle_text()
@@ -114,26 +170,22 @@ fn rank(query: &str) -> Vec<String> {
 
 pub(crate) fn search(query: &str) -> String {
     let ids = rank(query);
-
-    let cards: Vec<(String, String, String)> = {
-        let mut scryer = CARDS.lock().unwrap();
-        ids.into_iter()
-            .map(|id| {
-                ALL_FILES
-                    .iter()
-                    .filter(|filename| filename.starts_with(&id))
-                    .map(|filename| {
-                        let card = scryer.get_card_by_id(&id).unwrap();
-                        (id.clone(), filename.clone(), card.name().to_owned())
-                    })
-                    .collect::<Vec<(String, String, String)>>()
-            })
-            .flatten()
-            .collect()
-    };
-
-    cards
-        .into_iter()
+    let mut cards = CARDS.lock().unwrap();
+    ids.into_iter()
+        .map(|id| {
+            ALL_FILES
+                .lock()
+                .unwrap()
+                .get(&id)
+                .unwrap()
+                .iter()
+                .map(|filename| {
+                    let card = cards.get_card_by_id(&id).unwrap();
+                    (id.clone(), filename.clone(), card.name().to_owned())
+                })
+                .collect::<Vec<(String, String, String)>>()
+        })
+        .flatten()
         .map(|(id, img, name)| {
             format!(
                 r#"{{"imageUrl": "/images/{}", "uuid": "{}", "name": "{}"}}"#,
@@ -142,4 +194,13 @@ pub(crate) fn search(query: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+pub(crate) fn filter_string(input: String) -> String {
+    input
+        .split_whitespace()
+        .filter(|&token| TOKENS.lock().unwrap().contains(token))
+        .take(4) // TODO : I'm going to forget about this and it's going to be a problem
+        .collect::<Vec<&str>>()
+        .join(" ")
 }

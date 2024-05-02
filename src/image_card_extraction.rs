@@ -1,7 +1,10 @@
 use crate::card;
 use crate::image_hash;
+use crate::search;
+use crate::text_extraction::extract_text_from_mat;
 
 use anyhow::Result;
+use opencv::prelude::MatConstIteratorTraitManual;
 use opencv::{
     core::{Mat, Point, Point2f, Size, Vector},
     imgcodecs::{imdecode, IMREAD_COLOR},
@@ -29,16 +32,36 @@ pub(crate) fn process_frame(frame_data: &[u8]) -> Result<()> {
     };
 
     if alive {
-        if let Some(card_id) = image_hash::get_card_id(&frame) {
-            let mut cards = crate::search::CARDS.lock().unwrap();
-            let card = cards.get_card_by_id(&card_id).unwrap();
-            println!("Card: {}", card.name());
-        }
-    }
+        // Extract tokens
+        if let Ok(text) = extract_text_from_mat(&frame) {
+            // Filter to tokens in our dataset
+            let text = search::filter_string(text);
+            if !text.is_empty() {
+                // Get top 30 card matches
+                let results = search(&text);
+                // TODO : Change search function to return IDs?
+                // TODO : Add another function which converts IDs to the final format
 
-    // TODO : Then send the guessed ID/variation to the client to accept or not
-    // TODO : If DEATH comes before REJECTION, "save to database" (print for now)
-    // Then go back and fix everything up because a bunch of stuff is missing and broken
+                // TODO : Rank top 30 search results by image hash distance
+                // if let Some(card_id) = image_hash::get_card_id(&frame) {
+                //     let mut cards = crate::search::CARDS.lock().unwrap();
+                //     let card = cards.get_card_by_id(&card_id).unwrap();
+                //     println!("Card: {}", card.name());
+                // }
+
+                // TODO : Send the guessed ID/variation to the client to accept or not (finish UI)
+                // let reply = Message::text(format!(
+                //     r#"{{"action": "searchResults", "results": [{}]}}"#,
+                //     results
+                // ));
+                // assert!(tx.send(reply).await.is_ok());
+            }
+        }
+
+        // TODO : Database stuff
+        // TODO : If DEATH comes before REJECTION, "save to database" (print for now)
+        // TODO : Start testing
+    }
 
     // Send the frame to the visualizer, if the visualizer is enabled
     if let (Ok(visualizer), Ok(mut global_frame)) = (
