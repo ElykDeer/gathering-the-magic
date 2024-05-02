@@ -1,7 +1,7 @@
 mod card;
 mod image;
 mod image_card_extraction;
-mod image_hash;
+// mod image_hash;
 mod search;
 mod text_extraction;
 use crate::search::search;
@@ -29,7 +29,7 @@ async fn main() {
         }
     }
 
-    image_hash::hash_all_cards().unwrap();
+    // image_hash::hash_all_cards().unwrap();
 
     let static_files = warp::get().and(warp::fs::file("./index.html"));
     let image_route = warp::path("images").and(warp::fs::dir("./images/"));

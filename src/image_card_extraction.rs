@@ -1,10 +1,9 @@
 use crate::card;
-use crate::image_hash;
+// use crate::image_hash;
 use crate::search;
 use crate::text_extraction::extract_text_from_mat;
 
 use anyhow::Result;
-use opencv::prelude::MatConstIteratorTraitManual;
 use opencv::{
     core::{Mat, Point, Point2f, Size, Vector},
     imgcodecs::{imdecode, IMREAD_COLOR},
