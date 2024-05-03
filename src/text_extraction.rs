@@ -1,4 +1,4 @@
-use crate::image_card_extraction;
+use crate::image_camera;
 
 use opencv::{core::Vector, imgcodecs, imgproc, prelude::*};
 
@@ -10,7 +10,7 @@ lazy_static::lazy_static! {
 
 pub(crate) fn extract_text_from_mat(frame: &Mat) -> Result<String, Box<dyn std::error::Error>> {
     let card_image = {
-        let card = image_card_extraction::CARD.lock().unwrap();
+        let card = image_camera::CARD.lock().unwrap();
         if let Ok(card_image) = (*card).get_unwarped(frame) {
             Some(card_image.clone())
         } else {

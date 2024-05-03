@@ -6,7 +6,7 @@ use opencv::{
         LineTypes,
     },
 };
-use std::{collections::HashMap, time::SystemTime};
+use std::time::SystemTime;
 
 pub(crate) fn distance_formula(x1: i32, y1: i32, x2: i32, y2: i32) -> f64 {
     (((x2 - x1) as f64).powi(2) + ((y2 - y1) as f64).powi(2)).sqrt()
@@ -16,13 +16,12 @@ pub struct Card {
     pub rect: [[i32; 2]; 4],
     pub last_seen: SystemTime,
     pub alive: bool,
+    pub processed: bool,
     pub x: i32,
     pub y: i32,
     pub radius: f64,
     pub area: f64,
     pub contour: Vector<Point>,
-    pub hashes: HashMap<u64, u64>, // hash of the oracle, cumulative distance
-    pub id: String,
 }
 
 impl Card {
@@ -45,13 +44,12 @@ impl Card {
             rect: rect.try_into().unwrap(),
             last_seen: SystemTime::now(),
             alive: true,
+            processed: false,
             x,
             y,
             radius,
             area,
             contour,
-            hashes: HashMap::new(),
-            id: "".to_string(),
         }
     }
 
@@ -61,7 +59,9 @@ impl Card {
             self.last_seen = new_card.last_seen;
             self.x = new_card.x;
             self.y = new_card.y;
-            self.contour = new_card.contour.clone();
+            self.radius = new_card.radius;
+            self.area = new_card.area;
+            self.contour = new_card.contour;
         } else {
             *self = new_card;
         }
@@ -70,6 +70,7 @@ impl Card {
     // Set myself as stale if we haven't seen anything a while
     pub fn prune(&mut self) {
         if self.alive && self.last_seen.elapsed().unwrap().as_secs_f64() > 1.0 {
+            println!("Death");
             self.alive = false;
         }
     }
@@ -180,13 +181,12 @@ impl Default for Card {
             rect: <[_; 4]>::default(),
             last_seen: SystemTime::now(),
             alive: false,
+            processed: false,
             x: 0,
             y: 0,
             radius: 0.0,
             area: 0.0,
             contour: Vector::default(),
-            hashes: HashMap::new(),
-            id: "".to_string(),
         }
     }
 }

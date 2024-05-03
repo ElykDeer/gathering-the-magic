@@ -1,5 +1,4 @@
 use crate::card;
-// use crate::image_hash;
 use crate::search;
 use crate::text_extraction::extract_text_from_mat;
 
@@ -17,27 +16,29 @@ lazy_static::lazy_static! {
     pub(crate) static ref CARD: std::sync::Mutex<card::Card> = std::sync::Mutex::new(card::Card::default());
 }
 
-pub(crate) fn process_frame(frame_data: &[u8]) -> Result<()> {
+pub(crate) fn process_frame(frame_data: &[u8]) -> Result<Option<String>> {
     let mut frame = imdecode(&Vector::from_slice(frame_data), IMREAD_COLOR)?;
 
-    let alive = {
+    let (alive, processed) = {
         let mut card = CARD.lock().unwrap();
         if let Some(new_card) = get_card(&mut frame)? {
             card.update(new_card);
         }
         card.prune();
         card.draw(&mut frame);
-        card.alive
+        (card.alive, card.processed)
     };
 
-    if alive {
+    let mut results = None;
+    if alive && !processed {
         // Extract tokens
         if let Ok(text) = extract_text_from_mat(&frame) {
             // Filter to tokens in our dataset
             let text = search::filter_string(text);
             if !text.is_empty() {
                 // Get top 30 card matches
-                let results = search(&text);
+                results = Some(search(&text));
+                println!("Got search results for card.");
                 // TODO : Change search function to return IDs?
                 // TODO : Add another function which converts IDs to the final format
 
@@ -48,18 +49,18 @@ pub(crate) fn process_frame(frame_data: &[u8]) -> Result<()> {
                 //     println!("Card: {}", card.name());
                 // }
 
-                // TODO : Send the guessed ID/variation to the client to accept or not (finish UI)
-                // let reply = Message::text(format!(
-                //     r#"{{"action": "searchResults", "results": [{}]}}"#,
-                //     results
-                // ));
-                // assert!(tx.send(reply).await.is_ok());
+                let mut card = CARD.lock().unwrap();
+                card.processed = true;
             }
         }
 
-        // TODO : Database stuff
-        // TODO : If DEATH comes before REJECTION, "save to database" (print for now)
-        // TODO : Start testing
+        // TODO : Auto accept first result
+        // CONT :   I was hoping to just swipe it off frame
+        // CONT :     but that would interact poorly with the current rejection code
+        // CONT :   I was hoping to use the death signal as the accept signal
+        // CONT :     and to do that I'd need to add a different rejection signal/timer/handler
+        // CONT :   One idea I've had is to explicitly reject the IDs of the results
+        // CONT :     and filter future results instead of just making a new query
     }
 
     // Send the frame to the visualizer, if the visualizer is enabled
@@ -71,10 +72,11 @@ pub(crate) fn process_frame(frame_data: &[u8]) -> Result<()> {
             *global_frame = frame;
         }
     }
-    Ok(())
+    Ok(results)
 }
 
-pub fn get_card(frame: &mut Mat) -> Result<Option<card::Card>> {
+/// This function should take the raw camera image and normalize it for contour extraction
+fn camera_normalization(frame: &Mat) -> Result<Mat> {
     // Convert image to grayscale
     let mut gray = Mat::default();
     cvt_color(frame, &mut gray, COLOR_BGR2GRAY, 0)?;
@@ -97,13 +99,20 @@ pub fn get_card(frame: &mut Mat) -> Result<Option<card::Card>> {
     threshold(&gray, &mut thresh, 80.0, 255.0, THRESH_BINARY)?;
     // *frame = thresh.clone();
 
+    Ok(thresh)
+}
+
+/// Given a frame of video, this'll try to identify a contrasting rectangular object in the screen, and initialize a Card object for it
+fn get_card(frame: &mut Mat) -> Result<Option<card::Card>> {
+    let normalized_camera_input = camera_normalization(&frame)?;
+
     // let mut can = Mat::default();
     // canny(frame, &mut can, 100.0, 200.0, 3, false)?;
     // *frame = can.clone();
 
     let mut contours: Vector<Vector<Point>> = Vector::new();
     find_contours(
-        &thresh,
+        &normalized_camera_input,
         &mut contours,
         RetrievalModes::RETR_LIST as i32,
         ContourApproximationModes::CHAIN_APPROX_TC89_KCOS as i32,
@@ -141,10 +150,6 @@ pub fn get_card(frame: &mut Mat) -> Result<Option<card::Card>> {
         })
         .collect();
 
-    find_card(&contours)
-}
-
-fn find_card(contours: &Vector<Vector<Point>>) -> Result<Option<card::Card>> {
     let mut result: Vec<card::Card> = vec![];
 
     // Draw rectangles around all the contours

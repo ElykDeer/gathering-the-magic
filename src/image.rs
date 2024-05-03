@@ -8,6 +8,7 @@ lazy_static::lazy_static! {
     pub(crate) static ref CURRENT_FRAME: Arc<Mutex<Mat>> = Arc::new(Mutex::new(Mat::default()));
 }
 
+#[allow(dead_code)]
 mod visualizations {
     use anyhow::Result;
     use opencv::{
@@ -61,6 +62,7 @@ mod visualizations {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) async fn run_visualizer() -> Result<()> {
     opencv::highgui::named_window(
         "Gathering the Magic - Camera",

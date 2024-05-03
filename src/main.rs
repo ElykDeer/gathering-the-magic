@@ -1,17 +1,14 @@
 mod card;
+mod card_database;
 mod image;
-mod image_card_extraction;
-// mod image_hash;
+mod image_camera;
 mod search;
 mod text_extraction;
+mod websocket;
 use crate::search::search;
+// mod image_hash;
 
-use futures::{stream::StreamExt, SinkExt};
-use serde::Deserialize;
-use warp::{
-    ws::{Message, WebSocket},
-    Filter,
-};
+use warp::Filter;
 
 #[tokio::main]
 async fn main() {
@@ -36,7 +33,7 @@ async fn main() {
 
     let websocket_route = warp::path("websocket")
         .and(warp::ws())
-        .map(|ws: warp::ws::Ws| ws.on_upgrade(handle_websocket));
+        .map(|ws: warp::ws::Ws| ws.on_upgrade(websocket::handle_websocket));
 
     let routes = websocket_route.or(image_route).or(static_files);
 
@@ -45,73 +42,8 @@ async fn main() {
     }
 
     // Either spawn the server and run the visualizer, or just await the server
-    tokio::spawn(warp::serve(routes).run(([0, 0, 0, 0], 3030)));
-    // warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
+    // tokio::spawn(warp::serve(routes).run(([0, 0, 0, 0], 3030)));
+    warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
 
-    image::run_visualizer().await.unwrap();
-}
-
-#[derive(Deserialize)]
-struct ActionMessage {
-    action: String,
-    message: Option<String>,
-}
-
-async fn handle_websocket(websocket: WebSocket) {
-    let (mut tx, mut rx) = websocket.split();
-    while let Some(result) = rx.next().await {
-        let msg = match result {
-            Ok(msg) => msg,
-            Err(e) => {
-                eprintln!("websocket error: {:?}", e);
-                break;
-            }
-        };
-        if msg.is_text() {
-            if let Ok(text) = msg.to_str() {
-                if let Ok(action_msg) = serde_json::from_str::<ActionMessage>(text) {
-                    handle_action(&action_msg, &mut tx).await;
-                }
-            }
-        } else if msg.is_binary() {
-            if let Err(e) = image_card_extraction::process_frame(msg.as_bytes()) {
-                eprintln!("{:?}", e);
-            }
-        } else {
-            println!("Unknown : {:?}", msg);
-        }
-    }
-}
-
-async fn handle_action(
-    action_msg: &ActionMessage,
-    tx: &mut (impl SinkExt<Message> + std::marker::Unpin),
-) {
-    match action_msg.action.as_str() {
-        "search" => {
-            if let Some(message) = &action_msg.message {
-                println!("Searching for {}", message);
-                let results = search(message);
-                let reply = Message::text(format!(
-                    r#"{{"action": "searchResults", "results": [{}]}}"#,
-                    results
-                ));
-                assert!(tx.send(reply).await.is_ok());
-            } else {
-                println!("Error getting message.");
-            }
-        }
-        // "echo" => {
-        //     if let Some(message) = &action_msg.message {
-        //         let reply = Message::text(format!("Echo: {}", message));
-        //         tx.send(reply).await.unwrap();
-        //     }
-        // },
-        // "log" => {
-        //     if let Some(message) = &action_msg.message {
-        //         println!("Log: {}", message);
-        //     }
-        // },
-        _ => eprintln!("Unknown action: {}", action_msg.action),
-    }
+    // image::run_visualizer().await.unwrap();
 }

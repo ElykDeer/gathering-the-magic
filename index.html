@@ -76,7 +76,7 @@
             overflow-y: auto;
         }
 
-        .overlay-content {
+        .menu-content {
             position: absolute;
             top: 50%;
             left: 50%;
@@ -86,7 +86,7 @@
             font-size: 20px;
         }
 
-        #searchResults {
+        .results {
             display: flex;
             flex-wrap: wrap;
             justify-content: center;
@@ -115,17 +115,22 @@
     <video id="video" autoplay playsinline></video>
 
     <div class="overlay" id="menuOverlay" onclick="toggleMenu('menuOverlay')">
-        <div class="overlay-content">
+        <div class="menu-content">
             <p onclick="sendMessage('option 1')">History</p>
             <p>Calibrate Known Card</p>
         </div>
+    </div>
+
+    <div class="overlay" id="imageOverlay" onclick="toggleMenu('imageOverlay')"
+        style="background-color: rgba(0, 0, 0, 0); z-index: 0;">
+        <div class="results" id="imageResults"></div>
     </div>
 
     <div class="overlay" id="searchOverlay" onclick="toggleMenu('searchOverlay')">
         <input type="text" id="searchInput" placeholder="Search MTG Cards" oninput="searchCards()"
             onclick="event.stopPropagation()"
             style="width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box;">
-        <div id="searchResults" style="display: flex; flex-wrap: wrap; justify-content: center; padding: 20px;"></div>
+        <div class="results" id="searchResults"></div>
     </div>
 
     <div class="footer">
@@ -149,9 +154,8 @@
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         var cameraID = 0;
-        const frameInterval = 1000 / 30;
+        const frameInterval = 1000 / 5;  // 5 fps
         let lastFrameTime = Date.now();
-
 
         function connectWebSocket () {
             socket = new WebSocket('wss://laptop.elyk.io/websocket');
@@ -161,7 +165,8 @@
                 navigator.mediaDevices.enumerateDevices()
                     .then(devices => {
                         const videoDevices = devices.filter(device => device.kind === 'videoinput');
-                        cameraID = videoDevices[2].deviceId; // Check this logic as needed
+                        // TODO : This gets the last one, which might not be what we want.
+                        cameraID = videoDevices[2].deviceId;
                         getCameraStream();
                     })
                     .catch(console.error);
@@ -183,34 +188,45 @@
             socket.onmessage = function (event) {
                 console.log('Message from server ', event.data);
                 var data = JSON.parse(event.data);
+                if (data.action === "imageOverlay")
+                {
+                    toggleMenu('imageOverlay');
+                }
+                var resultsContainer = document.getElementById(data.action);
+                resultsContainer.innerHTML = '';
+                data.results.forEach(function (card) {
+                    var cardElement = document.createElement('div');
+                    cardElement.classList.add('card');
+                    cardElement.innerHTML = '<img src="https://laptop.elyk.io' + card.imageUrl + '" style="width: 100%;">';
+                    cardElement.onclick = function () { selectCard(card.imageUrl); };
+                    resultsContainer.appendChild(cardElement);
+                });
+            };
+
+            socket.onmessage = function (event) {
+                console.log('Message from server ', event.data);
+                var data = JSON.parse(event.data);
+                let resultsContainer;
                 if (data.action === "searchResults")
                 {
-                    var resultsContainer = document.getElementById('searchResults');
-                    resultsContainer.innerHTML = '';
-                    data.results.forEach(function (card) {
-                        var cardElement = document.createElement('div');
-                        cardElement.classList.add('card');
-                        cardElement.innerHTML = '<img src="https://laptop.elyk.io' + card.imageUrl + '" style="width: 100%;">';
-                        cardElement.onclick = function () { selectCard(card.uuid); };
-                        resultsContainer.appendChild(cardElement);
-                    });
-                }
+                    resultsContainer = document.getElementById('searchResults');
+                } else if (data.action === "imageResults")
+                {
+                    document.getElementById('imageOverlay').style.display = "block";
+                    resultsContainer = document.getElementById('imageResults');
+                } else { return; }
+                resultsContainer.innerHTML = '';
+                data.results.forEach(function (card) {
+                    var cardElement = document.createElement('div');
+                    cardElement.classList.add('card');
+                    cardElement.innerHTML = '<img src="https://laptop.elyk.io' + card.imageUrl + '" style="width: 100%;">';
+                    cardElement.onclick = function () { selectCard(card.imageUrl); };
+                    resultsContainer.appendChild(cardElement);
+                });
             };
         }
 
         connectWebSocket();
-
-        socket.onopen = function (event) {
-            navigator.mediaDevices.enumerateDevices()
-                .then(devices => {
-                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
-                    // TODO : This gets the last one, which might not be what we want.
-                    cameraID = videoDevices[2].deviceId;
-
-                    getCameraStream();
-                })
-                .catch(console.error);
-        };
 
         function getCameraStream () {
             const constraints = {
@@ -251,7 +267,7 @@
                     }
                 }, 'image/jpeg');
             }
-            requestAnimationFrame(drawAndSend);
+            setTimeout(drawAndSend, frameInterval);
         }
 
         function sendMessage (action, message) {
@@ -291,25 +307,7 @@
 
         function selectCard (uuid) {
             sendMessage("selectCard", uuid);
-            toggleMenu();
         }
-
-        socket.onmessage = function (event) {
-            console.log('Message from server ', event.data);
-            var data = JSON.parse(event.data);
-            if (data.action === "searchResults")
-            {
-                var resultsContainer = document.getElementById('searchResults');
-                resultsContainer.innerHTML = '';
-                data.results.forEach(function (card) {
-                    var cardElement = document.createElement('div');
-                    cardElement.classList.add('card');
-                    cardElement.innerHTML = '<img src="https://laptop.elyk.io' + card.imageUrl + '" style="width: 100%;">';
-                    cardElement.onclick = function () { selectCard(card.uuid); };
-                    resultsContainer.appendChild(cardElement);
-                });
-            }
-        };
     </script>
 </body>
 

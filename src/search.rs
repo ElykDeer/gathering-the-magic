@@ -57,26 +57,46 @@ lazy_static! {
         let mut cards = CARDS.lock().unwrap();
         let mut tokens = HashSet::new();
         for card in cards.cards().iter() {
-            tokens.extend(card.name().split_whitespace().map(String::from));
+            tokens.extend(
+                card.name()
+                    .to_lowercase()
+                    .split_whitespace()
+                    .map(String::from),
+            );
             if let Some(text) = card.oracle_text() {
-                tokens.extend(text.split_whitespace().map(String::from));
+                tokens.extend(text.to_lowercase().split_whitespace().map(String::from));
             }
             if let Some(type_line) = card.type_line() {
-                tokens.extend(type_line.split_whitespace().map(String::from));
+                tokens.extend(
+                    type_line
+                        .to_lowercase()
+                        .split_whitespace()
+                        .map(String::from),
+                );
             }
             tokens.extend(card.keywords().iter().map(String::from));
             if let Some(artist) = card.artist() {
-                tokens.extend(artist.split_whitespace().map(String::from));
+                tokens.extend(artist.to_lowercase().split_whitespace().map(String::from));
             }
             if let Some(flavor_name) = card.flavor_name() {
-                tokens.extend(flavor_name.split_whitespace().map(String::from));
+                tokens.extend(
+                    flavor_name
+                        .to_lowercase()
+                        .split_whitespace()
+                        .map(String::from),
+                );
             }
             if let Some(flavor_text) = card.flavor_text() {
-                tokens.extend(flavor_text.split_whitespace().map(String::from));
+                tokens.extend(
+                    flavor_text
+                        .to_lowercase()
+                        .split_whitespace()
+                        .map(String::from),
+                );
             }
 
             if let Some(set_name) = card.set_name() {
-                tokens.extend(set_name.split_whitespace().map(String::from));
+                tokens.extend(set_name.to_lowercase().split_whitespace().map(String::from));
             }
         }
 
@@ -181,17 +201,12 @@ pub(crate) fn search(query: &str) -> String {
                 .iter()
                 .map(|filename| {
                     let card = cards.get_card_by_id(&id).unwrap();
-                    (id.clone(), filename.clone(), card.name().to_owned())
+                    (filename.clone(), card.name().to_owned())
                 })
-                .collect::<Vec<(String, String, String)>>()
+                .collect::<Vec<(String, String)>>()
         })
         .flatten()
-        .map(|(id, img, name)| {
-            format!(
-                r#"{{"imageUrl": "/images/{}", "uuid": "{}", "name": "{}"}}"#,
-                img, id, name,
-            )
-        })
+        .map(|(img, name)| format!(r#"{{"imageUrl": "/images/{}", "name": "{}"}}"#, img, name,))
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -199,7 +214,7 @@ pub(crate) fn search(query: &str) -> String {
 pub(crate) fn filter_string(input: String) -> String {
     input
         .split_whitespace()
-        .filter(|&token| TOKENS.lock().unwrap().contains(token))
+        .filter(|&token| TOKENS.lock().unwrap().contains(&token.to_lowercase()))
         .take(4) // TODO : I'm going to forget about this and it's going to be a problem
         .collect::<Vec<&str>>()
         .join(" ")
