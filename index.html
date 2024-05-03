@@ -222,24 +222,6 @@
             socket.onmessage = function (event) {
                 console.log('Message from server ', event.data);
                 var data = JSON.parse(event.data);
-                if (data.action === "imageOverlay")
-                {
-                    toggleMenu('imageOverlay');
-                }
-                var resultsContainer = document.getElementById(data.action);
-                resultsContainer.innerHTML = '';
-                data.results.forEach(function (card) {
-                    var cardElement = document.createElement('div');
-                    cardElement.classList.add('card');
-                    cardElement.innerHTML = '<img src="https://laptop.elyk.io' + card.imageUrl + '" style="width: 100%;">';
-                    cardElement.onclick = function () { selectCard(card.imageUrl); };
-                    resultsContainer.appendChild(cardElement);
-                });
-            };
-
-            socket.onmessage = function (event) {
-                console.log('Message from server ', event.data);
-                var data = JSON.parse(event.data);
                 let resultsContainer;
                 if (data.action === "searchResults")
                 {
