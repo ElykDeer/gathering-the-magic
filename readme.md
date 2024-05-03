@@ -14,7 +14,7 @@ In the end, you'll have a database.json containing which cards you chose and how
 
 ## Will this project work for me?
 
-Probably not, sorry. But, mainly because there are some constants in the code I need to expose as variables. For example, I hard coded the index of the camera I want to use in the HTML. The size of cards is also hard-coded, and will vary based on resolution and distance to the cards.
+Probably not, sorry. But, mainly because there are some constants in the code I need to expose as variables. For example, I hard coded the surface area used for eliminating contours from the view which varies based on resolution and distance between the camera and the cards.
 
 If you want to try using this project please [reach out to me](elyk.dev) to let me know so I can make this project more user friendly.
 

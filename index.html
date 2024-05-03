@@ -86,6 +86,30 @@
             font-size: 20px;
         }
 
+        #cameraSelector {
+            padding: 8px 16px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        #cameraSelector:hover {
+            background-color: #0056b3;
+        }
+
+        #cameraSelector:focus {
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+        }
+
+        #cameraSelector option {
+            background: white;
+            color: black;
+        }
+
         .results {
             display: flex;
             flex-wrap: wrap;
@@ -117,7 +141,7 @@
     <div class="overlay" id="menuOverlay" onclick="toggleMenu('menuOverlay')">
         <div class="menu-content">
             <p onclick="sendMessage('option 1')">History</p>
-            <p>Calibrate Known Card</p>
+            <select id="cameraSelector" onclick="event.stopPropagation()" onchange="changeCamera(this.value)"></select>
         </div>
     </div>
 
@@ -134,7 +158,8 @@
     </div>
 
     <div class="footer">
-        <div class="button" id="rejectButton" onclick="sendMessage('reject')">
+        <div class="button" id="rejectButton"
+            onclick="sendMessage('reject'); document.getElementById('imageOverlay').style.display = 'none';">
             <div class="circle">&#10005;</div>
             <div class="name">Reject</div>
         </div>
@@ -165,9 +190,18 @@
                 navigator.mediaDevices.enumerateDevices()
                     .then(devices => {
                         const videoDevices = devices.filter(device => device.kind === 'videoinput');
-                        // TODO : This gets the last one, which might not be what we want.
-                        cameraID = videoDevices[2].deviceId;
-                        getCameraStream();
+                        const cameraSelector = document.getElementById('cameraSelector');
+                        videoDevices.forEach((device, index) => {
+                            let option = document.createElement('option');
+                            option.value = device.deviceId;
+                            option.text = device.label || `Camera ${index + 1}`;
+                            cameraSelector.appendChild(option);
+                        });
+                        if (videoDevices.length > 0)
+                        {
+                            cameraID = videoDevices[2].deviceId;
+                            getCameraStream();
+                        }
                     })
                     .catch(console.error);
             };
@@ -227,6 +261,11 @@
         }
 
         connectWebSocket();
+
+        function changeCamera (deviceId) {
+            cameraID = deviceId;
+            getCameraStream();
+        }
 
         function getCameraStream () {
             const constraints = {

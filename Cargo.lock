@@ -406,6 +406,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "gathering_the_magic"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "futures",
+ "glob",
+ "lazy_static",
+ "leptess",
+ "opencv",
+ "rayon",
+ "scryers",
+ "serde",
+ "serde_json",
+ "strsim",
+ "tokio",
+ "tokio-stream",
+ "warp",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -798,26 +818,6 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "tempfile",
-]
-
-[[package]]
-name = "newgtm"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "futures",
- "glob",
- "lazy_static",
- "leptess",
- "opencv",
- "rayon",
- "scryers",
- "serde",
- "serde_json",
- "strsim",
- "tokio",
- "tokio-stream",
- "warp",
 ]
 
 [[package]]
