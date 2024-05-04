@@ -86,6 +86,22 @@
             font-size: 20px;
         }
 
+        #historyOverlay .results {
+            position: relative;
+            padding-top: 50px;
+        }
+
+        #historyOverlay .results p {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            text-shadow: 0px 0px 8px rgba(0, 0, 0, 0.8);
+            font-size: 18px;
+            z-index: 3;
+        }
+
         #cameraSelector {
             padding: 8px 16px;
             background-color: #007BFF;
@@ -125,6 +141,50 @@
             flex: 0 1 30%;
             text-align: center;
             background: transparent;
+            position: relative;
+            color: white;
+            text-shadow: 0px 0px 8px rgba(0, 0, 0, 0.8);
+        }
+
+        .card .controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 25%;
+            display: flex;
+            align-items: center;
+        }
+
+        .card .decrement {
+            width: 50%;
+            height: 100%;
+            text-align: center;
+            padding-left: 20px;
+            padding-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            font-size: 3em;
+
+            background-color: transparent;
+            background-repeat: no-repeat;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .card .count {
+            width: 50%;
+            height: 100%;
+            text-align: right;
+            padding-right: 10px;
+            padding-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            font-size: 3em;
         }
 
         .card img {
@@ -138,23 +198,9 @@
 <body>
     <video id="video" autoplay playsinline></video>
 
-    <div class="overlay" id="menuOverlay" onclick="toggleMenu('menuOverlay')">
-        <div class="menu-content">
-            <p onclick="sendMessage('option 1')">History</p>
-            <select id="cameraSelector" onclick="event.stopPropagation()" onchange="changeCamera(this.value)"></select>
-        </div>
-    </div>
-
     <div class="overlay" id="imageOverlay" onclick="toggleMenu('imageOverlay')"
         style="background-color: rgba(0, 0, 0, 0); z-index: 0;">
         <div class="results" id="imageResults"></div>
-    </div>
-
-    <div class="overlay" id="searchOverlay" onclick="toggleMenu('searchOverlay')">
-        <input type="text" id="searchInput" placeholder="Search MTG Cards" oninput="searchCards()"
-            onclick="event.stopPropagation()"
-            style="width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box;">
-        <div class="results" id="searchResults"></div>
     </div>
 
     <div class="footer">
@@ -173,6 +219,24 @@
         </div>
     </div>
 
+    <div class="overlay" id="menuOverlay" onclick="toggleMenu('menuOverlay')">
+        <div class="menu-content">
+            <p onclick="sendMessage('history')">Library</p>
+            <select id="cameraSelector" onclick="event.stopPropagation()" onchange="changeCamera(this.value)"></select>
+        </div>
+    </div>
+
+    <div class="overlay" id="historyOverlay" onclick="toggleMenu('historyOverlay')">
+        <div class="results" id="historyResults"></div>
+    </div>
+
+    <div class="overlay" id="searchOverlay" onclick="toggleMenu('searchOverlay')">
+        <input type="text" id="searchInput" placeholder="Search MTG Cards" oninput="searchCards()"
+            onclick="event.stopPropagation()"
+            style="width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box;">
+        <div class="results" id="searchResults"></div>
+    </div>
+
     <script>
         const video = document.getElementById('video');
         let socket;
@@ -183,7 +247,7 @@
         let lastFrameTime = Date.now();
 
         function connectWebSocket () {
-            socket = new WebSocket('wss://laptop.elyk.io/websocket');
+            socket = new WebSocket('/websocket');
 
             socket.onopen = function (event) {
                 console.log("WebSocket is open now.");
@@ -223,26 +287,58 @@
                 console.log('Message from server ', event.data);
                 var data = JSON.parse(event.data);
                 let resultsContainer;
-                if (data.action === "searchResults")
+                switch (data.action)
                 {
-                    resultsContainer = document.getElementById('searchResults');
-                } else if (data.action === "imageResults")
-                {
-                    document.getElementById('imageOverlay').style.display = "block";
-                    resultsContainer = document.getElementById('imageResults');
-                } else { return; }
+                    case "searchResults":
+                        resultsContainer = document.getElementById('searchResults');
+                        break;
+                    case "imageResults":
+                        document.getElementById('imageOverlay').style.display = "block";
+                        resultsContainer = document.getElementById('imageResults');
+                        break;
+                    case "historyResults":
+                        const historyOverlay = document.getElementById('historyOverlay');
+                        resultsContainer = document.getElementById('historyResults');
+                        resultsContainer.innerHTML = '';
+
+                        const totals = document.createElement('p');
+                        totals.innerHTML = `Total Cards: ${data.totalCards} | Total Value: ${data.totalValue}<br>`;
+                        resultsContainer.appendChild(totals);
+
+                        updateHistory(data, historyOverlay, resultsContainer);
+                        return;
+                    default:
+                        return;
+                }
                 resultsContainer.innerHTML = '';
                 data.results.forEach(function (card) {
                     var cardElement = document.createElement('div');
                     cardElement.classList.add('card');
-                    cardElement.innerHTML = '<img src="https://laptop.elyk.io' + card.imageUrl + '" style="width: 100%;">';
-                    cardElement.onclick = function () { selectCard(card.imageUrl); };
+                    cardElement.innerHTML = `<img src="/images/${card.uuid}" style="width: 100%;">`;
+                    cardElement.onclick = function () { selectCard(card.uuid); };
                     resultsContainer.appendChild(cardElement);
                 });
             };
         }
 
-        connectWebSocket();
+        function updateHistory (data, historyOverlay, resultsContainer) {
+            data.cards.forEach(function (card) {
+                const cardElement = document.createElement('div');
+                cardElement.classList.add('card');
+                cardElement.innerHTML = `
+                    <div class="content">
+                        <img src="/images/${card.uuid}" style="width: 100%;">
+                    </div>
+                    <div class="controls">
+                        <button class="decrement" onclick="sendMessage('decCard', '${card.uuid}')">-</button>
+                        <div class="count">${card.count}</div>
+                    </div>
+                `;
+                resultsContainer.appendChild(cardElement);
+            });
+
+            historyOverlay.style.display = 'block';
+        }
 
         function changeCamera (deviceId) {
             cameraID = deviceId;
@@ -329,6 +425,8 @@
         function selectCard (uuid) {
             sendMessage("selectCard", uuid);
         }
+
+        connectWebSocket();
     </script>
 </body>
 

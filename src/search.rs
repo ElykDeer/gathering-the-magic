@@ -14,7 +14,7 @@ lazy_static! {
     pub(crate) static ref CARDS: Mutex<BulkDownload> = {
         Mutex::new(BulkDownload::new("./scryfall.db", BulkDownloadType::UniqueArtwork).unwrap())
     };
-    pub(crate) static ref ALL_FILES: Mutex<HashMap<String, Vec<String>>> = {
+    pub(crate) static ref ID_TO_FILES: Mutex<HashMap<String, Vec<String>>> = {
         let all_files: HashSet<String> = std::fs::read_dir(std::path::Path::new("./images/"))
             .unwrap()
             .map(|entry| {
@@ -190,23 +190,26 @@ fn rank(query: &str) -> Vec<String> {
 
 pub(crate) fn search(query: &str) -> String {
     let ids = rank(query);
-    let mut cards = CARDS.lock().unwrap();
+    // let mut cards = CARDS.lock().unwrap();
     ids.into_iter()
         .map(|id| {
-            ALL_FILES
+            ID_TO_FILES
                 .lock()
                 .unwrap()
                 .get(&id)
                 .unwrap()
                 .iter()
-                .map(|filename| {
-                    let card = cards.get_card_by_id(&id).unwrap();
-                    (filename.clone(), card.name().to_owned())
-                })
-                .collect::<Vec<(String, String)>>()
+                // .map(|filename| {
+                //     let card = cards.get_card_by_id(&id).unwrap();
+                //     (filename.clone(), card.name().to_owned())
+                // })
+                // .collect::<Vec<(String, String)>>()
+                .cloned()
+                .collect::<Vec<String>>()
         })
         .flatten()
-        .map(|(img, name)| format!(r#"{{"imageUrl": "/images/{}", "name": "{}"}}"#, img, name,))
+        // .map(|(img, name)| format!(r#"{{"uuid": "{}", "count": "{}"}}"#, img, name, count))
+        .map(|uuid| format!(r#"{{"uuid": "{}"}}"#, uuid))
         .collect::<Vec<_>>()
         .join(", ")
 }

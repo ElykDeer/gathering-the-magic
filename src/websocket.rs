@@ -83,6 +83,16 @@ async fn handle_action(
                 println!("Error getting message.");
             }
         }
+        "history" => {
+            println!("Sending history");
+            let (total_cards, total_value, cards) =
+                card_database::CARD_DATABASE.lock().unwrap().history();
+            let reply = Message::text(format!(
+                r#"{{"action": "historyResults", "totalCards": "{}", "totalValue": "${:.2}", "cards": [{}]}}"#,
+                total_cards, total_value, cards
+            ));
+            assert!(tx.send(reply).await.is_ok());
+        }
         // "setCard" => {
         //     if let Some(message) = &action_msg.message {
         //         card_database::CARD_DATABASE.lock().unwrap().set(message, ???);

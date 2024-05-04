@@ -12,6 +12,7 @@ use warp::Filter;
 
 #[tokio::main]
 async fn main() {
+    println!("Initializing...");
     if !(std::path::Path::new("./scryfall.db").exists()
         && std::path::Path::new("./images/").exists())
     {
@@ -38,8 +39,10 @@ async fn main() {
     let routes = websocket_route.or(image_route).or(static_files);
 
     {
-        let _unused = search::ALL_FILES.lock().unwrap();
+        let _unused = search::ID_TO_FILES.lock().unwrap();
     }
+
+    println!("Starting web server...");
 
     // Either spawn the server and run the visualizer, or just await the server
     // tokio::spawn(warp::serve(routes).run(([0, 0, 0, 0], 3030)));
