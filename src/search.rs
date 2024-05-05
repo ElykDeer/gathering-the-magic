@@ -11,9 +11,8 @@ use std::{
 use strsim::jaro_winkler;
 
 lazy_static! {
-    pub(crate) static ref CARDS: Mutex<BulkDownload> = {
-        Mutex::new(BulkDownload::new("./scryfall.db", BulkDownloadType::UniqueArtwork).unwrap())
-    };
+    pub(crate) static ref CARDS: Mutex<BulkDownload> =
+        Mutex::new(BulkDownload::new("./scryfall.db", BulkDownloadType::DefaultCards).unwrap());
     pub(crate) static ref ID_TO_FILES: Mutex<HashMap<String, Vec<String>>> = {
         let all_files: HashSet<String> = std::fs::read_dir(std::path::Path::new("./images/"))
             .unwrap()
@@ -29,8 +28,7 @@ lazy_static! {
             })
             .collect();
 
-        let mut cards =
-            BulkDownload::new("./scryfall.db", BulkDownloadType::UniqueArtwork).unwrap();
+        let mut cards = BulkDownload::new("./scryfall.db", BulkDownloadType::DefaultCards).unwrap();
         Mutex::new(
             cards
                 .cards()
@@ -57,6 +55,10 @@ lazy_static! {
         let mut cards = CARDS.lock().unwrap();
         let mut tokens = HashSet::new();
         for card in cards.cards().iter() {
+            if card.lang() != "en" {
+                continue;
+            }
+
             tokens.extend(
                 card.name()
                     .to_lowercase()
@@ -75,9 +77,6 @@ lazy_static! {
                 );
             }
             tokens.extend(card.keywords().iter().map(String::from));
-            if let Some(artist) = card.artist() {
-                tokens.extend(artist.to_lowercase().split_whitespace().map(String::from));
-            }
             if let Some(flavor_name) = card.flavor_name() {
                 tokens.extend(
                     flavor_name
@@ -151,10 +150,6 @@ fn rank(query: &str) -> Vec<String> {
                     max
                 }
             }),
-            card.artist()
-                .as_ref()
-                .map(|artist| jaro_winkler(&artist.to_lowercase(), &query.to_lowercase()))
-                .unwrap_or(0.0),
             card.flavor_name()
                 .as_ref()
                 .map(|flavor_name| jaro_winkler(&flavor_name.to_lowercase(), &query.to_lowercase()))
@@ -162,10 +157,6 @@ fn rank(query: &str) -> Vec<String> {
             card.flavor_text()
                 .as_ref()
                 .map(|flavor_text| jaro_winkler(&flavor_text.to_lowercase(), &query.to_lowercase()))
-                .unwrap_or(0.0),
-            card.set_name()
-                .as_ref()
-                .map(|set_name| jaro_winkler(&set_name.to_lowercase(), &query.to_lowercase()))
                 .unwrap_or(0.0),
         ];
         let max_score = scores.iter().cloned().fold(0.0, f64::max);
@@ -181,10 +172,7 @@ fn rank(query: &str) -> Vec<String> {
     }
     heap.into_sorted_vec()
         .into_iter()
-        .map(|scored| {
-            // println!("{} : {}", scored.card.name(), scored.score);
-            scored.card.id().to_owned()
-        })
+        .map(|scored| scored.card.id().to_owned())
         .collect()
 }
 
