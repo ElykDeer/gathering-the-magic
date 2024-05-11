@@ -12,13 +12,11 @@ There's also a search function if it doesn't identify your card correctly.
 
 In the end, you'll have a database.json containing which cards you chose and how many you have.
 
-## Will this project work for me?
+## How to use this project
 
-Probably not, sorry. But, mainly because there are some constants in the code I need to expose as variables. For example, I hard coded the surface area used for eliminating contours from the view which varies based on resolution and distance between the camera and the cards.
+Cards need to fill 20%-50% of the view area (you can change this, of course, in the source code - see `min_area` and `max_area` in `src/image_camera.rs`). On first run you'll need to download a database of the cards, this takes ~6h to respect the website that we're downloading from's rate limits. I recommend 3d printing a stand for your phone that will allow it to be parallel to the table without the legs of the stand getting in the way. About 12cm away from the table worked for me, with my phone, but you should do you own tests.
 
-If you want to try using this project please [reach out to me](elyk.dev) to let me know so I can make this project more user friendly.
-
-But in theory if you happen to have a Samsung S23+, can host this code with https at laptop.elyk.io, and can vertically mount your phone 13cm parallel to a table (I recommend 3d printing something...mine took a little less than 3h to print), it should work.
+Otherwise, cloning this repo and running `cargo run --release` should mostly do it. Some browsers may only want to use https to work correctly. Press `ctrl-c` to kill the program whenever you're done. 
 
 ## How this project works
 
