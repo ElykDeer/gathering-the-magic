@@ -167,7 +167,6 @@
             align-items: center;
             justify-content: flex-start;
             font-size: 3em;
-
             background-color: transparent;
             background-repeat: no-repeat;
             border: none;
@@ -236,13 +235,17 @@
 
         .card-detail .buttons {
             display: flex;
-            justify-content: space-around;
+            justify-content: space-between;
             margin-top: 20px;
         }
 
-        .card-detail .button {
+        .card-detail .column {
+            display: flex;
+            flex-direction: column;
             flex: 1;
-            margin: 0 10px;
+        }
+
+        .card-detail .button {
             background-color: #007BFF;
             border: none;
             border-radius: 5px;
@@ -250,6 +253,7 @@
             color: white;
             cursor: pointer;
             font-size: 16px;
+            margin: 5px;
         }
 
         .card-detail .button:hover {
@@ -311,10 +315,31 @@
                 <p>Foils: <span id="detailFoilCount">0</span></p>
             </div>
             <div class="buttons">
-                <div class="button" onclick="event.stopPropagation(); updateCardCount('dec', false)">Dec Non-Foil</div>
-                <div class="button" onclick="event.stopPropagation(); updateCardCount('inc', false)">Inc Non-Foil</div>
-                <div class="button" onclick="event.stopPropagation(); updateCardCount('dec', true)">Dec Foil</div>
-                <div class="button" onclick="event.stopPropagation(); updateCardCount('inc', true)">Inc Foil</div>
+                <div class="column">
+                    <div class="button"
+                        onclick="event.stopPropagation(); updateCardCount('inc', false); sendMessage('history')">Inc
+                        Non-Foil
+                    </div>
+                    <div class="button"
+                        onclick="event.stopPropagation(); updateCardCount('set', false); sendMessage('history')">Set
+                        Non-Foil
+                    </div>
+                    <div class="button"
+                        onclick="event.stopPropagation(); updateCardCount('dec', false); sendMessage('history')">Dec
+                        Non-Foil
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="button"
+                        onclick="event.stopPropagation(); updateCardCount('inc', true); sendMessage('history')">Inc Foil
+                    </div>
+                    <div class="button"
+                        onclick="event.stopPropagation(); updateCardCount('set', true); sendMessage('history')">Set Foil
+                    </div>
+                    <div class="button"
+                        onclick="event.stopPropagation(); updateCardCount('dec', true); sendMessage('history')">Dec Foil
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -481,12 +506,12 @@
             setTimeout(drawAndSend, frameInterval);
         }
 
-        function sendMessage (action, message, value) {
+        function sendMessage (action, message, count) {
             if (socket.readyState === WebSocket.OPEN)
             {
-                if (value)
+                if (count)
                 {
-                    socket.send(JSON.stringify({ action: action, message: message, value: value }));
+                    socket.send(JSON.stringify({ action: action, message: message, count: count }));
                 }
                 else if (message)
                 {
@@ -557,15 +582,15 @@
             document.getElementById('cardDetailOverlay').style.display = 'none';
         }
 
-        function updateCardCount (action, is_foil, new_count) {
+        function updateCardCount (action, is_foil) {
             const cardUuid = document.getElementById('detailCardImage').src.split('/').pop();
             let countElement;
             if (is_foil === true)
             {
                 countElement = document.getElementById('detailFoilCount');
             } else
-                countElement = document.getElementById('detailNonFoilCount');
             {
+                countElement = document.getElementById('detailNonFoilCount');
             }
 
             let count = parseInt(countElement.textContent, 10);
@@ -575,7 +600,6 @@
                 if (is_foil === true)
                 {
                     sendMessage('incFoil', cardUuid);
-
                 } else
                 {
                     sendMessage('incCard', cardUuid);
@@ -586,21 +610,27 @@
                 if (is_foil === true)
                 {
                     sendMessage('decFoil', cardUuid);
-
                 } else
                 {
                     sendMessage('decCard', cardUuid);
                 }
             } else if (action === 'set')
             {
-                count = new_count;
-                if (is_foil === true)
+                let newCount = prompt("Enter the new count:");
+                if (newCount !== null && !isNaN(newCount))
                 {
-                    sendMessage('setFoil', cardUuid, count);
-
+                    count = parseInt(newCount, 10);
+                    if (is_foil === true)
+                    {
+                        sendMessage('setFoil', cardUuid, count);
+                    } else
+                    {
+                        sendMessage('setCard', cardUuid, count);
+                    }
                 } else
                 {
-                    sendMessage('setCard', cardUuid, count);
+                    alert("Invalid count entered. Please enter a valid number.");
+                    return;
                 }
             }
             countElement.textContent = count;

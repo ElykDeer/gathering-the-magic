@@ -104,7 +104,7 @@ async fn handle_action(
         }
         "incFoil" => {
             if let Some(message) = &action_msg.message {
-                println!("Incrementing {}", message);
+                println!("Incrementing foil {}", message);
                 card_database::CARD_DATABASE
                     .lock()
                     .unwrap()
@@ -116,7 +116,7 @@ async fn handle_action(
         }
         "decFoil" => {
             if let Some(message) = &action_msg.message {
-                println!("Decrementing {}", message);
+                println!("Decrementing foil {}", message);
                 card_database::CARD_DATABASE
                     .lock()
                     .unwrap()
@@ -137,23 +137,41 @@ async fn handle_action(
             assert!(tx.send(reply).await.is_ok());
         }
         "setCard" => {
-            if let (Some(message), Some(count)) = (&action_msg.message, &action_msg.count) {
-                card_database::CARD_DATABASE
-                    .lock()
-                    .unwrap()
-                    .set(message, *count, false);
+            if let Some(message) = &action_msg.message {
+                println!(
+                    "Setting {} count to {}",
+                    message,
+                    action_msg.count.unwrap_or_default()
+                );
+                card_database::CARD_DATABASE.lock().unwrap().set(
+                    message,
+                    action_msg.count.unwrap_or_default(),
+                    false,
+                );
             } else {
-                println!("Error getting message.");
+                println!(
+                    "Error getting message {} {:?} {:?}",
+                    &action_msg.action, &action_msg.message, &action_msg.count
+                );
             }
         }
         "setFoil" => {
-            if let (Some(message), Some(count)) = (&action_msg.message, &action_msg.count) {
-                card_database::CARD_DATABASE
-                    .lock()
-                    .unwrap()
-                    .set(message, *count, true);
+            if let Some(message) = &action_msg.message {
+                println!(
+                    "Setting foil {} count to {}",
+                    message,
+                    action_msg.count.unwrap_or_default()
+                );
+                card_database::CARD_DATABASE.lock().unwrap().set(
+                    message,
+                    action_msg.count.unwrap_or_default(),
+                    true,
+                );
             } else {
-                println!("Error getting message.");
+                println!(
+                    "Error getting message {} {:?} {:?}",
+                    &action_msg.action, &action_msg.message, &action_msg.count
+                );
             }
         }
         "reject" => {
