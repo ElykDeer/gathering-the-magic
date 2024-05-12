@@ -9,6 +9,7 @@ use warp::ws::{Message, WebSocket};
 struct ActionMessage {
     action: String,
     message: Option<String>,
+    count: Option<usize>,
 }
 
 pub(crate) async fn handle_websocket(websocket: WebSocket) {
@@ -65,10 +66,25 @@ async fn handle_action(
                 println!("Error getting message.");
             }
         }
-        "selectCard" => {
+        "incCard" => {
             if let Some(message) = &action_msg.message {
                 println!("Incrementing {}", message);
-                card_database::CARD_DATABASE.lock().unwrap().inc(message);
+                if card_database::CARD_DATABASE
+                    .lock()
+                    .unwrap()
+                    .inc(message, false)
+                {
+                    let value = {
+                        let scryrs = crate::search::CARDS.lock().unwrap();
+                        scryrs
+                            .get_card_by_id(&message[..message.rfind('-').unwrap()])
+                            .unwrap()
+                            .usd()
+                    };
+                    let reply =
+                        Message::text(format!(r#"{{"action": "notify", "price": {}}}"#, value));
+                    assert!(tx.send(reply).await.is_ok());
+                }
                 kill_card();
             } else {
                 println!("Error getting message.");
@@ -77,7 +93,34 @@ async fn handle_action(
         "decCard" => {
             if let Some(message) = &action_msg.message {
                 println!("Decrementing {}", message);
-                card_database::CARD_DATABASE.lock().unwrap().dec(message);
+                card_database::CARD_DATABASE
+                    .lock()
+                    .unwrap()
+                    .dec(message, false);
+                kill_card();
+            } else {
+                println!("Error getting message.");
+            }
+        }
+        "incFoil" => {
+            if let Some(message) = &action_msg.message {
+                println!("Incrementing {}", message);
+                card_database::CARD_DATABASE
+                    .lock()
+                    .unwrap()
+                    .inc(message, true);
+                kill_card();
+            } else {
+                println!("Error getting message.");
+            }
+        }
+        "decFoil" => {
+            if let Some(message) = &action_msg.message {
+                println!("Decrementing {}", message);
+                card_database::CARD_DATABASE
+                    .lock()
+                    .unwrap()
+                    .dec(message, true);
                 kill_card();
             } else {
                 println!("Error getting message.");
@@ -93,13 +136,26 @@ async fn handle_action(
             ));
             assert!(tx.send(reply).await.is_ok());
         }
-        // "setCard" => {
-        //     if let Some(message) = &action_msg.message {
-        //         card_database::CARD_DATABASE.lock().unwrap().set(message, ???);
-        //     } else {
-        //         println!("Error getting message.");
-        //     }
-        // }
+        "setCard" => {
+            if let (Some(message), Some(count)) = (&action_msg.message, &action_msg.count) {
+                card_database::CARD_DATABASE
+                    .lock()
+                    .unwrap()
+                    .set(message, *count, false);
+            } else {
+                println!("Error getting message.");
+            }
+        }
+        "setFoil" => {
+            if let (Some(message), Some(count)) = (&action_msg.message, &action_msg.count) {
+                card_database::CARD_DATABASE
+                    .lock()
+                    .unwrap()
+                    .set(message, *count, true);
+            } else {
+                println!("Error getting message.");
+            }
+        }
         "reject" => {
             println!("Reject");
             // By marking a card as dead, the next frame it's detected it'll recalculate what the card is

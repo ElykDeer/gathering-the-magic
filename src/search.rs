@@ -28,7 +28,7 @@ lazy_static! {
             })
             .collect();
 
-        let mut cards = BulkDownload::new("./scryfall.db", BulkDownloadType::DefaultCards).unwrap();
+        let cards = BulkDownload::new("./scryfall.db", BulkDownloadType::DefaultCards).unwrap();
         Mutex::new(
             cards
                 .cards()
@@ -52,7 +52,7 @@ lazy_static! {
         )
     };
     pub(crate) static ref TOKENS: Mutex<HashSet<String>> = {
-        let mut cards = CARDS.lock().unwrap();
+        let cards = BulkDownload::new("./scryfall.db", BulkDownloadType::DefaultCards).unwrap();
         let mut tokens = HashSet::new();
         for card in cards.cards().iter() {
             if card.lang() != "en" {
@@ -129,37 +129,41 @@ impl<'a> PartialOrd for ScoredCard<'a> {
 }
 
 fn rank(query: &str) -> Vec<String> {
-    let mut cards = CARDS.lock().unwrap();
+    let cards = CARDS.lock().unwrap();
     let mut heap = BinaryHeap::new();
 
-    // let recent_sets = crate::card_database::CARD_DATABASE
-    //     .lock()
-    //     .unwrap()
-    //     .history
-    //     .iter()
-    //     .rev()
-    //     .take(30)
-    //     .map(|history_entry| {
-    //         cards
-    //             .get_card_by_id(
-    //                 &history_entry.file_name[..history_entry.file_name.rfind('-').unwrap()],
-    //             )
-    //             .unwrap()
-    //             .set_name()
-    //             .to_owned()
-    //     })
-    //     .take(3)
-    //     .collect::<HashSet<_>>();
+    // Get recent sets
+    let recent_sets: HashSet<_> = crate::card_database::CARD_DATABASE
+        .lock()
+        .unwrap()
+        .history
+        .iter()
+        .rev()
+        .take(30)
+        .map(|history_entry| {
+            cards
+                .get_card_by_id(
+                    &history_entry.file_name[..history_entry.file_name.rfind('-').unwrap()],
+                )
+                .unwrap()
+                .set_name()
+                .to_owned()
+        })
+        .take(3)
+        .collect();
 
     for card in cards.cards() {
-        // let set_score = if recent_sets.contains(card.set_name()) {
-        //     2.0
-        // } else {
-        //     1.0
-        // };
+        let name_score = jaro_winkler(&card.name().to_lowercase(), &query.to_lowercase());
+
+        // Check if the card's set is recent
+        let set_score = if recent_sets.contains(card.set_name()) {
+            1.2 // Boost score for recent sets
+        } else {
+            1.0
+        };
+
         let scores = [
-            // jaro_winkler(&card.name().to_lowercase(), &query.to_lowercase()) * set_score,
-            jaro_winkler(&card.name().to_lowercase(), &query.to_lowercase()),
+            name_score * set_score,
             card.oracle_text()
                 .as_ref()
                 .map(|text| jaro_winkler(&text.to_lowercase(), &query.to_lowercase()))
@@ -185,11 +189,14 @@ fn rank(query: &str) -> Vec<String> {
                 .map(|flavor_text| jaro_winkler(&flavor_text.to_lowercase(), &query.to_lowercase()))
                 .unwrap_or(0.0),
         ];
-        let max_score = scores.iter().cloned().fold(0.0, f64::max);
+        let max_score = *scores
+            .iter()
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
 
         heap.push(ScoredCard {
             score: max_score,
-            card: &card,
+            card,
         });
 
         if heap.len() > 30 {
@@ -204,7 +211,8 @@ fn rank(query: &str) -> Vec<String> {
 
 pub(crate) fn search(query: &str) -> String {
     let ids = rank(query);
-    // let mut cards = CARDS.lock().unwrap();
+    let cards = CARDS.lock().unwrap();
+    let database = crate::card_database::CARD_DATABASE.lock().unwrap();
     ids.into_iter()
         .map(|id| {
             ID_TO_FILES
@@ -213,17 +221,24 @@ pub(crate) fn search(query: &str) -> String {
                 .get(&id)
                 .unwrap()
                 .iter()
-                // .map(|filename| {
-                //     let card = cards.get_card_by_id(&id).unwrap();
-                //     (filename.clone(), card.name().to_owned())
-                // })
-                // .collect::<Vec<(String, String)>>()
-                .cloned()
-                .collect::<Vec<String>>()
+                .map(|file_id| {
+                    let card = cards.get_card_by_id(&id).unwrap();
+                    (
+                        file_id.clone(),
+                        database.get(file_id),
+                        database.get_foil(file_id),
+                        card.usd(),
+                    )
+                })
+                .collect::<Vec<(String, usize, usize, f64)>>()
         })
         .flatten()
-        // .map(|(img, name)| format!(r#"{{"uuid": "{}", "count": "{}"}}"#, img, name, count))
-        .map(|uuid| format!(r#"{{"uuid": "{}"}}"#, uuid))
+        .map(|(uuid, non_foil_count, foil_count, value)| {
+            format!(
+                r#"{{"uuid": "{}", "non_foil_count": "{}", "foil_count": "{}", "value": "{:.2}"}}"#,
+                uuid, non_foil_count, foil_count, value
+            )
+        })
         .collect::<Vec<_>>()
         .join(", ")
 }

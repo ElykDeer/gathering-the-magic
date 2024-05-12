@@ -13,6 +13,7 @@
             height: 100%;
             overflow: hidden;
             font-family: Arial, sans-serif;
+            user-select: none;
         }
 
         #video {
@@ -192,6 +193,68 @@
             border-radius: 5px;
             overflow: hidden;
         }
+
+        .card-detail-overlay {
+            position: fixed;
+            display: none;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 3;
+            overflow-y: auto;
+            padding: 20px;
+            color: white;
+            text-align: center;
+            box-sizing: border-box;
+        }
+
+        .card-detail {
+            background-color: #333;
+            border-radius: 10px;
+            padding: 20px;
+            max-width: 90%;
+            margin: 0 auto;
+            box-sizing: border-box;
+        }
+
+        .card-detail img {
+            width: 100%;
+            border-radius: 20px;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+
+        .card-detail .info {
+            text-align: left;
+            display: flex;
+            justify-content: space-around;
+        }
+
+        .card-detail .buttons {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+        }
+
+        .card-detail .button {
+            flex: 1;
+            margin: 0 10px;
+            background-color: #007BFF;
+            border: none;
+            border-radius: 5px;
+            padding: 10px;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .card-detail .button:hover {
+            background-color: #0056b3;
+        }
     </style>
 </head>
 
@@ -237,6 +300,23 @@
             onclick="event.stopPropagation()" autofocus
             style="width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box;">
         <div class="results" id="searchResults"></div>
+    </div>
+
+    <div class="card-detail-overlay" id="cardDetailOverlay" onclick="closeCardDetail()">
+        <div class="card-detail">
+            <img id="detailCardImage" src="" alt="Card Image">
+            <div class="info">
+                <p id="detailCardValue">Value: $0.00</p>
+                <p>Non-Foils: <span id="detailNonFoilCount">0</span></p>
+                <p>Foils: <span id="detailFoilCount">0</span></p>
+            </div>
+            <div class="buttons">
+                <div class="button" onclick="event.stopPropagation(); updateCardCount('dec', false)">Dec Non-Foil</div>
+                <div class="button" onclick="event.stopPropagation(); updateCardCount('inc', false)">Inc Non-Foil</div>
+                <div class="button" onclick="event.stopPropagation(); updateCardCount('dec', true)">Dec Foil</div>
+                <div class="button" onclick="event.stopPropagation(); updateCardCount('inc', true)">Inc Foil</div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -319,7 +399,11 @@
                     var cardElement = document.createElement('div');
                     cardElement.classList.add('card');
                     cardElement.innerHTML = `<img src="/images/${card.uuid}" style="width: 100%;">`;
-                    cardElement.onclick = function () { selectCard(card.uuid); };
+                    cardElement.onclick = function () { sendMessage("incCard", card.uuid); };
+                    cardElement.oncontextmenu = function (e) {
+                        e.preventDefault();
+                        showCardDetail(card);
+                    };
                     resultsContainer.appendChild(cardElement);
                 });
             };
@@ -329,15 +413,20 @@
             data.cards.forEach(function (card) {
                 const cardElement = document.createElement('div');
                 cardElement.classList.add('card');
+                let card_count = parseInt(card.foil_count, 10) + parseInt(card.non_foil_count, 10);
                 cardElement.innerHTML = `
                     <div class="content">
-                        <img src="/images/${card.uuid}" onclick="selectCard('${card.uuid}'); event.stopPropagation(); sendMessage('history')">
+                        <img src="/images/${card.uuid}" onclick="sendMessage('incCard', '${card.uuid}'); event.stopPropagation(); sendMessage('history')">
                     </div>
                     <div class="controls">
                         <button class="decrement" onclick="sendMessage('decCard', '${card.uuid}'); event.stopPropagation(); sendMessage('history')">-</button>
-                        <div class="count">${card.count}</div>
+                        <div class="count">${card_count}</div>
                     </div>
                 `;
+                cardElement.oncontextmenu = function (e) {
+                    e.preventDefault();
+                    showCardDetail(card);
+                };
                 resultsContainer.appendChild(cardElement);
             });
 
@@ -355,9 +444,6 @@
                     width: { ideal: 1920 },
                     height: { ideal: 1080 },
                     frameRate: { ideal: 30 },
-                    // width: { ideal: 3840 },
-                    // height: { ideal: 2160 },
-                    // frameRate: { ideal: 30 },
                     deviceId: cameraID ? { exact: cameraID } : undefined
                 }
             };
@@ -395,10 +481,14 @@
             setTimeout(drawAndSend, frameInterval);
         }
 
-        function sendMessage (action, message) {
+        function sendMessage (action, message, value) {
             if (socket.readyState === WebSocket.OPEN)
             {
-                if (message)
+                if (value)
+                {
+                    socket.send(JSON.stringify({ action: action, message: message, value: value }));
+                }
+                else if (message)
                 {
                     socket.send(JSON.stringify({ action: action, message: message }));
                 } else
@@ -444,10 +534,6 @@
             searchTimeoutId = setTimeout(searchCardsDebounced, 350);
         }
 
-        function selectCard (uuid) {
-            sendMessage("selectCard", uuid);
-        }
-
         function toggleVideo () {
             if (isVideoPlaying)
             {
@@ -457,6 +543,67 @@
                 video.play();
             }
             isVideoPlaying = !isVideoPlaying;
+        }
+
+        function showCardDetail (card) {
+            document.getElementById('detailCardImage').src = `/images/${card.uuid}`;
+            document.getElementById('detailCardValue').textContent = `Value: $${card.value}`;
+            document.getElementById('detailNonFoilCount').textContent = card.non_foil_count;
+            document.getElementById('detailFoilCount').textContent = card.foil_count;
+            document.getElementById('cardDetailOverlay').style.display = 'block';
+        }
+
+        function closeCardDetail () {
+            document.getElementById('cardDetailOverlay').style.display = 'none';
+        }
+
+        function updateCardCount (action, is_foil, new_count) {
+            const cardUuid = document.getElementById('detailCardImage').src.split('/').pop();
+            let countElement;
+            if (is_foil === true)
+            {
+                countElement = document.getElementById('detailFoilCount');
+            } else
+                countElement = document.getElementById('detailNonFoilCount');
+            {
+            }
+
+            let count = parseInt(countElement.textContent, 10);
+            if (action === 'inc')
+            {
+                count += 1;
+                if (is_foil === true)
+                {
+                    sendMessage('incFoil', cardUuid);
+
+                } else
+                {
+                    sendMessage('incCard', cardUuid);
+                }
+            } else if (action === 'dec' && count > 0)
+            {
+                count -= 1;
+                if (is_foil === true)
+                {
+                    sendMessage('decFoil', cardUuid);
+
+                } else
+                {
+                    sendMessage('decCard', cardUuid);
+                }
+            } else if (action === 'set')
+            {
+                count = new_count;
+                if (is_foil === true)
+                {
+                    sendMessage('setFoil', cardUuid, count);
+
+                } else
+                {
+                    sendMessage('setCard', cardUuid, count);
+                }
+            }
+            countElement.textContent = count;
         }
 
         connectWebSocket();
