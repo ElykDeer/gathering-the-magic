@@ -81,25 +81,21 @@ impl CardDatabase {
         self.history.push(entry);
     }
 
-    pub(crate) fn inc(&mut self, id: &str, foil: bool) -> bool {
+    pub(crate) fn inc(&mut self, id: &str, foil: bool) {
         let counts = self
             .database
             .entry(id.to_string())
             .or_insert(CardCounts::default());
-        let result = if foil {
+        if foil {
             counts.foil += 1;
-            counts.foil == 1
         } else {
             counts.non_foil += 1;
-            counts.non_foil == 1
         };
 
         self.record_change(id.to_string(), ChangeType::Inc, foil);
         if let Err(e) = self.save() {
             eprintln!("Failed to save data: {}", e);
         }
-
-        result
     }
 
     pub(crate) fn dec(&mut self, id: &str, foil: bool) {

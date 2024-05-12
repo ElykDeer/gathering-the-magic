@@ -132,7 +132,6 @@
             flex-wrap: wrap;
             justify-content: center;
             padding: 20px;
-            max-height: 80%;
             overflow-y: auto;
         }
 
@@ -173,6 +172,18 @@
             outline: none;
             cursor: pointer;
             overflow: hidden;
+        }
+
+        .card .value {
+            width: 50%;
+            height: 100%;
+            text-align: left;
+            padding-left: 10px;
+            padding-bottom: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            font-size: 1.5em;
         }
 
         .card .count {
@@ -266,8 +277,8 @@
     <video id="video" autoplay playsinline></video>
 
     <div class="overlay" id="imageOverlay" onclick="toggleMenu('imageOverlay')"
-        style="background-color: rgba(0, 0, 0, 0); z-index: 0;">
-        <div class="results" id="imageResults"></div>
+        style="background-color: rgba(0, 0, 0, 0); z-index: 0; top: 38vh;">
+        <div class="results" id="imageResults" style="max-height: 42%;"></div>
     </div>
 
     <div class="footer">
@@ -286,24 +297,35 @@
         </div>
     </div>
 
+    <div class="card" id="recentCardDisplay" style="position: fixed; right: 0; top: 0; max-width: 30vw;">
+        <div class="content">
+            <img id="recentCardImage" src="/images/${card.uuid}">
+        </div>
+        <div class="controls">
+            <div id="recentCardValue" class="value">$0.00</div>
+            <div id="recentCardCount" class="count">0</div>
+        </div>
+    </div>
+
     <div class="overlay" id="menuOverlay"
         onclick="toggleMenu('menuOverlay'); document.getElementById('imageResults').innerHTML = '';">
         <div class="menu-content">
-            <p onclick="sendMessage('history')">Library</p>
+            <p onclick="sendMessage('history'); document.getElementById('historyOverlay').style.display = 'block';">
+                Library</p>
             <select id="cameraSelector" onclick="event.stopPropagation()" onchange="changeCamera(this.value)"></select>
             <p onclick="toggleVideo()">Toggle Video</p>
         </div>
     </div>
 
     <div class="overlay" id="historyOverlay" onclick="toggleMenu('historyOverlay')">
-        <div class="results" id="historyResults"></div>
+        <div class="results" id="historyResults" style="max-height: 75%;"></div>
     </div>
 
     <div class="overlay" id="searchOverlay" onclick="toggleMenu('searchOverlay')">
         <input type="text" id="searchInput" placeholder="Search MTG Cards" oninput="searchCards()"
             onclick="event.stopPropagation()" autofocus
             style="width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box;">
-        <div class="results" id="searchResults"></div>
+        <div class="results" id="searchResults" style="max-height: 75%;"></div>
     </div>
 
     <div class="card-detail-overlay" id="cardDetailOverlay" onclick="closeCardDetail()">
@@ -314,30 +336,24 @@
                 <p>Non-Foils: <span id="detailNonFoilCount">0</span></p>
                 <p>Foils: <span id="detailFoilCount">0</span></p>
             </div>
-            <div class="buttons">
+            <div class="buttons" onclick="sendMessage('history')">
                 <div class="column">
-                    <div class="button"
-                        onclick="event.stopPropagation(); updateCardCount('inc', false); sendMessage('history')">Inc
+                    <div class="button" onclick="updateCardCount('inc', false)">Inc
                         Non-Foil
                     </div>
-                    <div class="button"
-                        onclick="event.stopPropagation(); updateCardCount('set', false); sendMessage('history')">Set
+                    <div class="button" onclick="updateCardCount('set', false)">Set
                         Non-Foil
                     </div>
-                    <div class="button"
-                        onclick="event.stopPropagation(); updateCardCount('dec', false); sendMessage('history')">Dec
+                    <div class="button" onclick="updateCardCount('dec', false)">Dec
                         Non-Foil
                     </div>
                 </div>
                 <div class="column">
-                    <div class="button"
-                        onclick="event.stopPropagation(); updateCardCount('inc', true); sendMessage('history')">Inc Foil
+                    <div class="button" onclick="updateCardCount('inc', true)">Inc Foil
                     </div>
-                    <div class="button"
-                        onclick="event.stopPropagation(); updateCardCount('set', true); sendMessage('history')">Set Foil
+                    <div class="button" onclick="updateCardCount('set', true)">Set Foil
                     </div>
-                    <div class="button"
-                        onclick="event.stopPropagation(); updateCardCount('dec', true); sendMessage('history')">Dec Foil
+                    <div class="button" onclick="updateCardCount('dec', true)">Dec Foil
                     </div>
                 </div>
             </div>
@@ -416,6 +432,9 @@
 
                         updateHistory(data, historyOverlay, resultsContainer);
                         return;
+                    case "update_recent":
+                        updateRecentCardDisplay(data.card);
+                        return;
                     default:
                         return;
                 }
@@ -454,8 +473,6 @@
                 };
                 resultsContainer.appendChild(cardElement);
             });
-
-            historyOverlay.style.display = 'block';
         }
 
         function changeCamera (deviceId) {
@@ -634,6 +651,20 @@
                 }
             }
             countElement.textContent = count;
+        }
+
+        function updateRecentCardDisplay (card) {
+            if (card)
+            {
+                document.getElementById('recentCardDisplay').style.display = 'block';
+                document.getElementById('recentCardImage').src = `/images/${card.uuid}`;
+                document.getElementById('recentCardValue').textContent = `$${card.value}`;
+                document.getElementById('recentCardCount').textContent = parseInt(card.foil_count, 10) + parseInt(card.non_foil_count, 10);
+                document.getElementById('recentCardDisplay').oncontextmenu = function (e) {
+                    e.preventDefault();
+                    showCardDetail(card);
+                };
+            }
         }
 
         connectWebSocket();

@@ -13,7 +13,9 @@ struct ActionMessage {
 }
 
 pub(crate) async fn handle_websocket(websocket: WebSocket) {
+    kill_card();
     let (mut tx, mut rx) = websocket.split();
+    update_recent(&mut tx).await;
     while let Some(result) = rx.next().await {
         let msg = match result {
             Ok(msg) => msg,
@@ -65,26 +67,32 @@ async fn handle_action(
             } else {
                 println!("Error getting message.");
             }
+            return;
+        }
+        "history" => {
+            println!("Sending history");
+            let (total_cards, total_value, cards) =
+                card_database::CARD_DATABASE.lock().unwrap().history();
+            let reply = Message::text(format!(
+                r#"{{"action": "historyResults", "totalCards": "{}", "totalValue": "${:.2}", "cards": [{}]}}"#,
+                total_cards, total_value, cards
+            ));
+            assert!(tx.send(reply).await.is_ok());
+            return;
+        }
+        "reject" => {
+            println!("Reject");
+            // By marking a card as dead, the next frame it's detected it'll recalculate what the card is
+            kill_card();
+            return;
         }
         "incCard" => {
             if let Some(message) = &action_msg.message {
                 println!("Incrementing {}", message);
-                if card_database::CARD_DATABASE
+                card_database::CARD_DATABASE
                     .lock()
                     .unwrap()
-                    .inc(message, false)
-                {
-                    let value = {
-                        let scryrs = crate::search::CARDS.lock().unwrap();
-                        scryrs
-                            .get_card_by_id(&message[..message.rfind('-').unwrap()])
-                            .unwrap()
-                            .usd()
-                    };
-                    let reply =
-                        Message::text(format!(r#"{{"action": "notify", "price": {}}}"#, value));
-                    assert!(tx.send(reply).await.is_ok());
-                }
+                    .inc(message, false);
                 kill_card();
             } else {
                 println!("Error getting message.");
@@ -126,16 +134,6 @@ async fn handle_action(
                 println!("Error getting message.");
             }
         }
-        "history" => {
-            println!("Sending history");
-            let (total_cards, total_value, cards) =
-                card_database::CARD_DATABASE.lock().unwrap().history();
-            let reply = Message::text(format!(
-                r#"{{"action": "historyResults", "totalCards": "{}", "totalValue": "${:.2}", "cards": [{}]}}"#,
-                total_cards, total_value, cards
-            ));
-            assert!(tx.send(reply).await.is_ok());
-        }
         "setCard" => {
             if let Some(message) = &action_msg.message {
                 println!(
@@ -174,12 +172,37 @@ async fn handle_action(
                 );
             }
         }
-        "reject" => {
-            println!("Reject");
-            // By marking a card as dead, the next frame it's detected it'll recalculate what the card is
-            kill_card()
+        _ => {
+            eprintln!("Unknown action: {}", action_msg.action);
+            return;
         }
-        _ => eprintln!("Unknown action: {}", action_msg.action),
+    }
+    update_recent(tx).await;
+}
+
+async fn update_recent(tx: &mut (impl SinkExt<Message> + std::marker::Unpin)) {
+    if let Some(card) = {
+        let scryrs = crate::search::CARDS.lock().unwrap();
+        let database = card_database::CARD_DATABASE.lock().unwrap();
+        database.history
+                .iter()
+                .rev()
+                .next()
+                .and_then(|history_entry| {
+                    format!(
+                        r#"{{"uuid": "{}", "non_foil_count": "{}", "foil_count": "{}", "value": "{:.2}"}}"#,
+                        &history_entry.file_name,
+                        database.get(&history_entry.file_name),
+                        database.get_foil(&history_entry.file_name),
+                        scryrs.get_card_by_id(&history_entry.file_name[..history_entry.file_name.rfind('-').unwrap()]).unwrap().usd()
+                    ).into()
+                })
+    } {
+        let reply = Message::text(format!(
+            r#"{{"action": "update_recent", "card": {}}}"#,
+            card
+        ));
+        assert!(tx.send(reply).await.is_ok());
     }
 }
 
