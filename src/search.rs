@@ -105,12 +105,14 @@ lazy_static! {
 
 struct ScoredCard<'a> {
     score: f64,
+    is_recent_set: bool,
     card: &'a Card,
 }
 
 impl<'a> PartialEq for ScoredCard<'a> {
     fn eq(&self, other: &Self) -> bool {
-        (self.score - other.score).abs() < f64::EPSILON
+        ((self.score - other.score).abs() < f64::EPSILON)
+            && (self.is_recent_set == other.is_recent_set)
     }
 }
 
@@ -124,7 +126,10 @@ impl<'a> Ord for ScoredCard<'a> {
 
 impl<'a> PartialOrd for ScoredCard<'a> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        other.score.partial_cmp(&self.score)
+        match other.score.partial_cmp(&self.score) {
+            Some(Ordering::Equal) => Some(self.is_recent_set.cmp(&other.is_recent_set).reverse()),
+            other => other,
+        }
     }
 }
 
@@ -155,15 +160,8 @@ fn rank(query: &str) -> Vec<String> {
     for card in cards.cards() {
         let name_score = jaro_winkler(&card.name().to_lowercase(), &query.to_lowercase());
 
-        // Check if the card's set is recent
-        let set_score = if recent_sets.contains(card.set_name()) {
-            1.2 // Boost score for recent sets
-        } else {
-            1.0
-        };
-
         let scores = [
-            name_score * set_score,
+            name_score,
             card.oracle_text()
                 .as_ref()
                 .map(|text| jaro_winkler(&text.to_lowercase(), &query.to_lowercase()))
@@ -196,6 +194,7 @@ fn rank(query: &str) -> Vec<String> {
 
         heap.push(ScoredCard {
             score: max_score,
+            is_recent_set: recent_sets.contains(card.set_name()),
             card,
         });
 

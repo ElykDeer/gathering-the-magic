@@ -38,7 +38,7 @@ pub(crate) fn process_frame(frame_data: &[u8]) -> Result<Option<String>> {
             if !text.is_empty() {
                 // Get top 30 card matches
                 results = Some(search(&text));
-                println!("Got search results for card.");
+                println!("Got search results for `{}`.", &text);
                 // TODO : Change search function to return IDs?
                 // TODO : Add another function which converts IDs to the final format
 
