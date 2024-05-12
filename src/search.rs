@@ -124,6 +124,7 @@ impl<'a> Ord for ScoredCard<'a> {
     }
 }
 
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl<'a> PartialOrd for ScoredCard<'a> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match other.score.partial_cmp(&self.score) {
@@ -213,7 +214,7 @@ pub(crate) fn search(query: &str) -> String {
     let cards = CARDS.lock().unwrap();
     let database = crate::card_database::CARD_DATABASE.lock().unwrap();
     ids.into_iter()
-        .map(|id| {
+        .flat_map(|id| {
             ID_TO_FILES
                 .lock()
                 .unwrap()
@@ -231,7 +232,6 @@ pub(crate) fn search(query: &str) -> String {
                 })
                 .collect::<Vec<(String, usize, usize, f64)>>()
         })
-        .flatten()
         .map(|(uuid, non_foil_count, foil_count, value)| {
             format!(
                 r#"{{"uuid": "{}", "non_foil_count": "{}", "foil_count": "{}", "value": "{:.2}"}}"#,

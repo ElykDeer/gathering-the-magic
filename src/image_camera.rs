@@ -94,7 +94,7 @@ fn camera_normalization(frame: &Mat) -> Result<Mat> {
 
 /// Given a frame of video, this'll try to identify a contrasting rectangular object in the screen, and initialize a Card object for it
 fn get_card(frame: &mut Mat) -> Result<Option<card::Card>> {
-    let normalized_camera_input = camera_normalization(&frame)?;
+    let normalized_camera_input = camera_normalization(frame)?;
 
     // let mut can = Mat::default();
     // canny(frame, &mut can, 100.0, 200.0, 3, false)?;

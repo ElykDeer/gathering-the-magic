@@ -185,9 +185,7 @@ async fn update_recent(tx: &mut (impl SinkExt<Message> + std::marker::Unpin)) {
         let scryrs = crate::search::CARDS.lock().unwrap();
         let database = card_database::CARD_DATABASE.lock().unwrap();
         database.history
-                .iter()
-                .rev()
-                .next()
+                .iter().next_back()
                 .and_then(|history_entry| {
                     format!(
                         r#"{{"uuid": "{}", "non_foil_count": "{}", "foil_count": "{}", "value": "{:.2}"}}"#,

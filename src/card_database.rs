@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json;
+
 use std::{
     collections::{HashMap, HashSet},
     fs::{self, File},
@@ -85,7 +85,7 @@ impl CardDatabase {
         let counts = self
             .database
             .entry(id.to_string())
-            .or_insert(CardCounts::default());
+            .or_default();
         if foil {
             counts.foil += 1;
         } else {
@@ -116,12 +116,12 @@ impl CardDatabase {
         if foil {
             self.database
                 .entry(id.to_string())
-                .or_insert(CardCounts::default())
+                .or_default()
                 .foil = value;
         } else {
             self.database
                 .entry(id.to_string())
-                .or_insert(CardCounts::default())
+                .or_default()
                 .non_foil = value;
         }
         self.record_change(id.to_string(), ChangeType::Set, foil);
