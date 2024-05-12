@@ -6,7 +6,6 @@ mod search;
 mod text_extraction;
 mod websocket;
 use crate::search::search;
-// mod image_hash;
 
 use warp::Filter;
 
@@ -26,8 +25,6 @@ async fn main() {
             scryers::download_all_cards();
         }
     }
-
-    // image_hash::hash_all_cards().unwrap();
 
     let static_files = warp::get().and(warp::fs::file("./index.html"));
     let image_route = warp::path("images").and(warp::fs::dir("./images/"));

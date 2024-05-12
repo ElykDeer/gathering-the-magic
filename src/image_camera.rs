@@ -4,7 +4,7 @@ use crate::text_extraction::extract_text_from_mat;
 
 use anyhow::Result;
 use opencv::{
-    core::{Mat, Point, Point2f, Size, Vector},
+    core::{Mat, MatTraitConst, Point, Point2f, Size, Vector},
     imgcodecs::{imdecode, IMREAD_COLOR},
     imgproc::{
         bounding_rect, cvt_color, find_contours, gaussian_blur, min_area_rect, threshold,
@@ -42,13 +42,6 @@ pub(crate) fn process_frame(frame_data: &[u8]) -> Result<Option<String>> {
                 // TODO : Change search function to return IDs?
                 // TODO : Add another function which converts IDs to the final format
 
-                // TODO : Rank top 30 search results by image hash distance
-                // if let Some(card_id) = image_hash::get_card_id(&frame) {
-                //     let mut cards = crate::search::CARDS.lock().unwrap();
-                //     let card = cards.get_card_by_id(&card_id).unwrap();
-                //     println!("Card: {}", card.name());
-                // }
-
                 let mut card = CARD.lock().unwrap();
                 card.processed = true;
             }
@@ -56,7 +49,7 @@ pub(crate) fn process_frame(frame_data: &[u8]) -> Result<Option<String>> {
 
         // TODO : Auto accept first result
         // CONT :   I was hoping to just swipe it off frame
-        // CONT :     but that would interact poorly with the current rejection code
+        // CONT :     but that would interact poorly with the current rejection code / results speed
         // CONT :   I was hoping to use the death signal as the accept signal
         // CONT :     and to do that I'd need to add a different rejection signal/timer/handler
         // CONT :   One idea I've had is to explicitly reject the IDs of the results
@@ -80,7 +73,6 @@ fn camera_normalization(frame: &Mat) -> Result<Mat> {
     // Convert image to grayscale
     let mut gray = Mat::default();
     cvt_color(frame, &mut gray, COLOR_BGR2GRAY, 0)?;
-    // *frame = gray.clone();
 
     // Apply Gaussian blur
     let mut blur = Mat::default();
@@ -92,12 +84,10 @@ fn camera_normalization(frame: &Mat) -> Result<Mat> {
         0.0,
         opencv::core::BORDER_DEFAULT,
     )?;
-    // *frame = blur.clone();
 
     // Apply binary threshold
     let mut thresh = Mat::default();
     threshold(&gray, &mut thresh, 80.0, 255.0, THRESH_BINARY)?;
-    // *frame = thresh.clone();
 
     Ok(thresh)
 }
@@ -108,7 +98,6 @@ fn get_card(frame: &mut Mat) -> Result<Option<card::Card>> {
 
     // let mut can = Mat::default();
     // canny(frame, &mut can, 100.0, 200.0, 3, false)?;
-    // *frame = can.clone();
 
     let mut contours: Vector<Vector<Point>> = Vector::new();
     find_contours(
@@ -120,16 +109,16 @@ fn get_card(frame: &mut Mat) -> Result<Option<card::Card>> {
     )?;
 
     // Prune Contours
+    let frame_area = frame.size()?.width * frame.size()?.height;
+    let min_area = frame_area as f64 * 0.2;
+    let max_area = frame_area as f64 * 0.5;
     let contours: Vector<Vector<Point>> = contours
         .into_iter()
         .filter(|c| {
             let area = opencv::imgproc::contour_area(&c, false).unwrap();
 
             // Filter contours based on the area size
-            // average = 1_745_674
-            // min = 900_577
-            // max = 2_381_695
-            if area > 1_800_000.0 && area < 5_000_000.0 {
+            if min_area < area && area < max_area {
                 let peri = opencv::imgproc::arc_length(&c, true).unwrap();
                 let mut approx: Vector<Point> = Vector::new();
                 opencv::imgproc::approx_poly_dp(&c, &mut approx, 0.02 * peri, true).unwrap();

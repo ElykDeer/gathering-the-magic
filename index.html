@@ -21,8 +21,8 @@
             left: 0;
             right: 0;
             bottom: 0;
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
             background-size: cover;
             overflow: hidden;
             object-fit: fill;
@@ -213,16 +213,18 @@
             <div class="circle">&#9776;</div>
             <div class="name">Menu</div>
         </div>
-        <div class="button" onclick="toggleMenu('searchOverlay')">
+        <div class="button" onclick="openSearch()">
             <div class="circle">&#43;</div>
-            <div class="name">Enter</div>
+            <div class="name">Search</div>
         </div>
     </div>
 
-    <div class="overlay" id="menuOverlay" onclick="toggleMenu('menuOverlay')">
+    <div class="overlay" id="menuOverlay"
+        onclick="toggleMenu('menuOverlay'); document.getElementById('imageResults').innerHTML = '';">
         <div class="menu-content">
             <p onclick="sendMessage('history')">Library</p>
             <select id="cameraSelector" onclick="event.stopPropagation()" onchange="changeCamera(this.value)"></select>
+            <p onclick="toggleVideo()">Toggle Video</p>
         </div>
     </div>
 
@@ -232,7 +234,7 @@
 
     <div class="overlay" id="searchOverlay" onclick="toggleMenu('searchOverlay')">
         <input type="text" id="searchInput" placeholder="Search MTG Cards" oninput="searchCards()"
-            onclick="event.stopPropagation()"
+            onclick="event.stopPropagation()" autofocus
             style="width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box;">
         <div class="results" id="searchResults"></div>
     </div>
@@ -245,6 +247,8 @@
         var cameraID = 0;
         const frameInterval = 1000 / 5;  // 5 fps
         let lastFrameTime = Date.now();
+        let searchTimeoutId;
+        let isVideoPlaying = true;
 
         function connectWebSocket () {
             socket = new WebSocket('/websocket');
@@ -327,10 +331,10 @@
                 cardElement.classList.add('card');
                 cardElement.innerHTML = `
                     <div class="content">
-                        <img src="/images/${card.uuid}" style="width: 100%;">
+                        <img src="/images/${card.uuid}" onclick="selectCard('${card.uuid}'); event.stopPropagation(); sendMessage('history')">
                     </div>
                     <div class="controls">
-                        <button class="decrement" onclick="sendMessage('decCard', '${card.uuid}')">-</button>
+                        <button class="decrement" onclick="sendMessage('decCard', '${card.uuid}'); event.stopPropagation(); sendMessage('history')">-</button>
                         <div class="count">${card.count}</div>
                     </div>
                 `;
@@ -348,8 +352,12 @@
         function getCameraStream () {
             const constraints = {
                 video: {
-                    width: { ideal: 3840 },
-                    height: { ideal: 2160 },
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 },
+                    frameRate: { ideal: 30 },
+                    // width: { ideal: 3840 },
+                    // height: { ideal: 2160 },
+                    // frameRate: { ideal: 30 },
                     deviceId: cameraID ? { exact: cameraID } : undefined
                 }
             };
@@ -414,7 +422,16 @@
             }
         }
 
-        function searchCards () {
+        function openSearch () {
+            document.getElementById('imageResults').innerHTML = '';
+            document.getElementById('searchResults').innerHTML = '';
+            document.getElementById('searchInput').value = '';
+
+            toggleMenu('searchOverlay');
+            document.getElementById('searchInput').focus();
+        }
+
+        function searchCardsDebounced () {
             var input = document.getElementById('searchInput').value;
             if (input.length > 1)
             {
@@ -422,8 +439,24 @@
             }
         }
 
+        function searchCards () {
+            clearTimeout(searchTimeoutId);
+            searchTimeoutId = setTimeout(searchCardsDebounced, 350);
+        }
+
         function selectCard (uuid) {
             sendMessage("selectCard", uuid);
+        }
+
+        function toggleVideo () {
+            if (isVideoPlaying)
+            {
+                video.pause();;
+            } else
+            {
+                video.play();
+            }
+            isVideoPlaying = !isVideoPlaying;
         }
 
         connectWebSocket();

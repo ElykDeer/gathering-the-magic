@@ -19,7 +19,7 @@ pub(crate) enum ChangeType {
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct HistoryEntry {
-    file_name: String,
+    pub(crate) file_name: String,
     change_type: ChangeType,
     updated_value: usize,
 }
@@ -27,7 +27,7 @@ pub(crate) struct HistoryEntry {
 #[derive(Serialize, Deserialize, Default)]
 pub(crate) struct CardDatabase {
     database: HashMap<String, usize>,
-    history: Vec<HistoryEntry>,
+    pub(crate) history: Vec<HistoryEntry>,
 }
 
 impl CardDatabase {
@@ -119,8 +119,9 @@ impl CardDatabase {
             self.history
                 .iter()
                 .rev()
+                .take(120)
                 .filter(|history_entry| seen_files.insert(history_entry.file_name.clone()))
-                .take(30)
+                .take(60)
                 .map(|history_entry| {
                     format!(
                         r#"{{"uuid": "{}", "count": "{}"}}"#,

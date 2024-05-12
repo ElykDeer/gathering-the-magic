@@ -1,8 +1,7 @@
 use crate::image_camera;
 
-use opencv::{core::Vector, imgcodecs, imgproc, prelude::*};
-
 use leptess::{leptonica, tesseract};
+use opencv::{core::Vector, imgcodecs, imgproc, prelude::*};
 
 lazy_static::lazy_static! {
     pub(crate) static ref TESSERACT_API: std::sync::Mutex<tesseract::TessApi> = std::sync::Mutex::new(tesseract::TessApi::new(None, "eng").unwrap());
@@ -54,21 +53,7 @@ pub(crate) fn extract_text_from_mat(frame: &Mat) -> Result<String, Box<dyn std::
     let pix = leptonica::pix_read_mem(buf.as_ref())?;
 
     // Recognize text
-    let text = {
-        let mut api = TESSERACT_API.lock()?;
-        api.set_image(&pix);
-        api.get_utf8_text()?
-    };
-
-    // Trim the junk characters from the start and end
-    let start_of_good = text.chars().position(|c| c.is_alphanumeric()).unwrap_or(0);
-    let end_of_good = text[start_of_good..]
-        .chars()
-        .position(|c| !c.is_alphanumeric() && !c.is_whitespace())
-        .map_or(text.len(), |pos| start_of_good + pos);
-    Ok(text[start_of_good..end_of_good]
-        .trim()
-        .chars()
-        .take(20)
-        .collect())
+    let mut api = TESSERACT_API.lock()?;
+    api.set_image(&pix);
+    Ok(api.get_utf8_text()?)
 }

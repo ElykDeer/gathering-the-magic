@@ -131,8 +131,34 @@ impl<'a> PartialOrd for ScoredCard<'a> {
 fn rank(query: &str) -> Vec<String> {
     let mut cards = CARDS.lock().unwrap();
     let mut heap = BinaryHeap::new();
+
+    // let recent_sets = crate::card_database::CARD_DATABASE
+    //     .lock()
+    //     .unwrap()
+    //     .history
+    //     .iter()
+    //     .rev()
+    //     .take(30)
+    //     .map(|history_entry| {
+    //         cards
+    //             .get_card_by_id(
+    //                 &history_entry.file_name[..history_entry.file_name.rfind('-').unwrap()],
+    //             )
+    //             .unwrap()
+    //             .set_name()
+    //             .to_owned()
+    //     })
+    //     .take(3)
+    //     .collect::<HashSet<_>>();
+
     for card in cards.cards() {
+        // let set_score = if recent_sets.contains(card.set_name()) {
+        //     2.0
+        // } else {
+        //     1.0
+        // };
         let scores = [
+            // jaro_winkler(&card.name().to_lowercase(), &query.to_lowercase()) * set_score,
             jaro_winkler(&card.name().to_lowercase(), &query.to_lowercase()),
             card.oracle_text()
                 .as_ref()
